@@ -103,4 +103,30 @@ describe('DashboardPage', () => {
     expect(labels.map((label) => label.dataset.dayPosition)).toEqual(['0', '1', '2', '3', '4', '5', '6']);
     expect(labels.at(-1)).toHaveTextContent('Timeline reminder 7');
   });
+
+  it('keeps day 28 through 30 labels anchored to their plotted edge coordinates', () => {
+    const nextThirtyDays = [
+      ['2026-09-16', 28],
+      ['2026-09-17', 29],
+      ['2026-09-18', 30],
+    ].map(([endDate, day]) => ({
+      id: `edge-${day}`,
+      name: `Edge reminder ${day}`,
+      endDate: String(endDate),
+      urgency: 'SAFE' as const,
+      remainingCalendarDays: Number(day),
+      relativeTime: `${day} days left`,
+      scheduledEmail: null,
+    }));
+
+    const { container } = render(<DashboardPage data={{ ...data, nextThirtyDays }} />);
+    const labels = Array.from(container.querySelectorAll<HTMLElement>('[data-day-position]'));
+
+    expect(labels.map((label) => label.style.gridColumn)).toEqual([
+      '29 / span 1',
+      '30 / span 1',
+      '31 / span 1',
+    ]);
+    expect(labels.every((label) => label.classList.contains('timeline-items__label--edge'))).toBe(true);
+  });
 });

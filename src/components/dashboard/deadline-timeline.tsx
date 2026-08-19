@@ -20,15 +20,17 @@ export function DeadlineTimeline({ reminders }: { reminders: DashboardReminderIt
   }));
   const laneEnds: number[] = [];
   const positionedLabels = points.map((point) => {
-    const gridColumn = Math.min(point.day + 1, 28);
-    let gridRow = laneEnds.findIndex((end) => end < gridColumn);
+    const alignsFromRight = point.day >= 28;
+    const occupiedStart = alignsFromRight ? Math.max(0, point.day - 3) : point.day;
+    const occupiedEnd = alignsFromRight ? point.day : Math.min(30, point.day + 3);
+    let gridRow = laneEnds.findIndex((end) => end < occupiedStart);
     if (gridRow === -1) {
       gridRow = laneEnds.length;
-      laneEnds.push(gridColumn + 3);
+      laneEnds.push(occupiedEnd);
     } else {
-      laneEnds[gridRow] = gridColumn + 3;
+      laneEnds[gridRow] = occupiedEnd;
     }
-    return { ...point, gridColumn, gridRow: gridRow + 1 };
+    return { ...point, alignsFromRight, gridColumn: point.day + 1, gridRow: gridRow + 1 };
   });
   const summary = reminders.length === 0
     ? 'No active reminders are overdue or due in the next 30 days.'
@@ -58,17 +60,20 @@ export function DeadlineTimeline({ reminders }: { reminders: DashboardReminderIt
       <div className="timeline-items" aria-hidden="true">
         {positionedLabels.map((reminder) => (
           <span
+            className={`timeline-items__label${reminder.alignsFromRight ? ' timeline-items__label--edge' : ''}`}
             key={reminder.id}
             data-day-position={reminder.day}
             style={{
               borderColor: COLORS[reminder.urgency],
-              gridColumn: `${reminder.gridColumn} / span 4`,
+              gridColumn: `${reminder.gridColumn} / span 1`,
               gridRow: reminder.gridRow,
             }}
           >
-            <strong>{formatShortDate(reminder.endDate)}</strong>
-            <small>{reminder.name}</small>
-            <small className="timeline-items__relative">{reminder.relativeTime}</small>
+            <span className="timeline-items__content">
+              <strong>{formatShortDate(reminder.endDate)}</strong>
+              <small>{reminder.name}</small>
+              <small className="timeline-items__relative">{reminder.relativeTime}</small>
+            </span>
           </span>
         ))}
       </div>
