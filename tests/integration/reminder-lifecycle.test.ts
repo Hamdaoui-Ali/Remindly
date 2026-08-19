@@ -142,6 +142,7 @@ describe('ReminderService lifecycle', () => {
       channel: 'EMAIL',
     });
     expect(cycle.notification.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(cycle.notification.idempotencyKey).toBe(cycle.notification.id);
     expect(await prisma.notification.count({ where: { reminderId: cycle.reminder.id } })).toBe(1);
   });
 

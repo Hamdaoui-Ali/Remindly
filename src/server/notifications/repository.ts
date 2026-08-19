@@ -9,6 +9,7 @@ import type {
 export type NotificationDatabase = PrismaClient | Prisma.TransactionClient;
 
 export interface CreatePendingNotification {
+  id?: string;
   reminderId: string;
   scheduledFor: Date;
   idempotencyKey: string;
@@ -50,6 +51,32 @@ export interface ReclaimExpiredProcessing extends NotificationStatusTransition {
   incrementAttemptCount: boolean;
 }
 
+export interface AtomicDueClaim {
+  now: Date;
+  leaseExpiredBefore: Date;
+  limit: number;
+  maximumAttempts: number;
+  pendingStatus: NotificationStatus;
+  failedStatus: NotificationStatus;
+  processingStatus: NotificationStatus;
+  claimedStatus: NotificationStatus;
+}
+
+export interface MissingNotificationReconciliation {
+  now: Date;
+  reminderStatus: 'ACTIVE';
+  channel: NotificationChannel;
+  notificationStatus: NotificationStatus;
+}
+
+export interface ClaimedNotification extends Notification {
+  recovered: boolean;
+}
+
+export type NotificationWithReminder = Prisma.NotificationGetPayload<{
+  include: { reminder: true };
+}>;
+
 /**
  * Persistence primitives only. Task 5 selects eligible statuses, retry timing,
  * the 15-minute lease cutoff, and all lifecycle transition values.
@@ -58,7 +85,9 @@ export class NotificationRepository {
   constructor(private readonly db: NotificationDatabase) {}
 
   createPending(input: CreatePendingNotification): Promise<Notification> {
-    return this.db.notification.create({ data: input });
+    return this.db.notification.create({
+      data: { ...input, id: input.id ?? input.idempotencyKey },
+    });
   }
 
   findPendingForReminderIds(reminderIds: string[]): Promise<Notification[]> {
@@ -97,6 +126,110 @@ export class NotificationRepository {
       orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }],
       take: query.limit,
     });
+  }
+
+  claimDue(input: AtomicDueClaim): Promise<ClaimedNotification[]> {
+    return this.db.$queryRaw<ClaimedNotification[]>`
+      WITH candidates AS (
+        SELECT id, status AS original_status
+        FROM notifications
+        WHERE attempt_count < ${input.maximumAttempts}
+          AND (
+            (status = ${input.pendingStatus}::"NotificationStatus" AND scheduled_for <= ${input.now})
+            OR (status = ${input.failedStatus}::"NotificationStatus" AND next_attempt_at <= ${input.now})
+            OR (
+              status = ${input.processingStatus}::"NotificationStatus"
+              AND processing_started_at < ${input.leaseExpiredBefore}
+            )
+          )
+        ORDER BY scheduled_for ASC, created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${input.limit}
+      )
+      UPDATE notifications AS notification
+      SET status = ${input.claimedStatus}::"NotificationStatus",
+          attempt_count = notification.attempt_count + 1,
+          processing_started_at = ${input.now},
+          next_attempt_at = NULL,
+          updated_at = ${input.now}
+      FROM candidates
+      WHERE notification.id = candidates.id
+      RETURNING
+        notification.id,
+        notification.reminder_id AS "reminderId",
+        notification.scheduled_for AS "scheduledFor",
+        notification.channel::text AS channel,
+        notification.status::text AS status,
+        notification.attempt_count AS "attemptCount",
+        notification.next_attempt_at AS "nextAttemptAt",
+        notification.processing_started_at AS "processingStartedAt",
+        notification.idempotency_key AS "idempotencyKey",
+        notification.provider_message_id AS "providerMessageId",
+        notification.last_error AS "lastError",
+        notification.sent_at AS "sentAt",
+        notification.created_at AS "createdAt",
+        notification.updated_at AS "updatedAt",
+        (candidates.original_status = ${input.processingStatus}::"NotificationStatus") AS recovered
+    `;
+  }
+
+  findClaimedWithReminder(id: string): Promise<NotificationWithReminder | null> {
+    return this.db.notification.findUnique({
+      where: { id },
+      include: { reminder: true },
+    });
+  }
+
+  async transitionWhenStatus(
+    id: string,
+    expectedStatus: NotificationStatus,
+    transition: NotificationTransition,
+  ): Promise<boolean> {
+    const result = await this.db.notification.updateMany({
+      where: { id, status: expectedStatus },
+      data: transition,
+    });
+    return result.count === 1;
+  }
+
+  async reconcileMissingPending(input: MissingNotificationReconciliation): Promise<number> {
+    const created = await this.db.$queryRaw<Array<{ id: string }>>`
+      WITH missing AS MATERIALIZED (
+        SELECT gen_random_uuid() AS id, reminder.id AS reminder_id, reminder.alert_at
+        FROM reminders AS reminder
+        WHERE reminder.status = ${input.reminderStatus}::"ReminderStatus"
+          AND NOT EXISTS (
+            SELECT 1
+            FROM notifications AS notification
+            WHERE notification.reminder_id = reminder.id
+              AND notification.scheduled_for = reminder.alert_at
+              AND notification.channel = ${input.channel}::"NotificationChannel"
+          )
+      )
+      INSERT INTO notifications (
+        id,
+        reminder_id,
+        scheduled_for,
+        channel,
+        status,
+        idempotency_key,
+        created_at,
+        updated_at
+      )
+      SELECT
+        missing.id,
+        missing.reminder_id,
+        missing.alert_at,
+        ${input.channel}::"NotificationChannel",
+        ${input.notificationStatus}::"NotificationStatus",
+        missing.id::text,
+        ${input.now},
+        ${input.now}
+      FROM missing
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    `;
+    return created.length;
   }
 
   async claimPending(input: ClaimPendingNotification): Promise<Notification | null> {

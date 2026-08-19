@@ -10,12 +10,14 @@ export function createPendingEmailNotification(
   reminderId: string,
   scheduledFor: Date,
 ): Promise<Notification> {
+  const id = crypto.randomUUID();
   return new NotificationRepository(tx).createPending({
+    id,
     reminderId,
     scheduledFor,
     channel: 'EMAIL',
     status: 'PENDING',
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey: id,
   });
 }
 
