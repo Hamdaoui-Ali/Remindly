@@ -15,6 +15,7 @@ import type {
   CreateReminderInput,
   ReminderCycle,
   ReminderListItem,
+  ReminderWithNotifications,
   RenewalInput,
   UpdateReminderInput,
 } from './types';
@@ -98,6 +99,14 @@ function requireActiveTransition(count: number): void {
 }
 
 export class ReminderService {
+  getReminderWithHistory(id: string): Promise<ReminderWithNotifications> {
+    return withTransaction(async (tx) => {
+      const reminder = await new ReminderRepository(tx).findByIdWithNotifications(id);
+      if (!reminder) throw new ReminderLifecycleError('Reminder not found');
+      return reminder;
+    });
+  }
+
   createReminder(input: CreateReminderInput, now: Date): Promise<ReminderCycle> {
     void now;
     return withTransaction(async (tx) => this.createCycle(tx, input));

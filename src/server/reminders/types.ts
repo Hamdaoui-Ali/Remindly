@@ -1,4 +1,4 @@
-import type { Notification, Reminder } from '@/generated/prisma/client';
+import type { Notification, Prisma, Reminder } from '@/generated/prisma/client';
 import type { Urgency } from '@/server/urgency/types';
 
 export interface CreateReminderInput {
@@ -30,3 +30,7 @@ export interface ReminderListItem {
   remainingCalendarDays: number;
   scheduledEmail: Pick<Notification, 'id' | 'scheduledFor' | 'status' | 'channel'> | null;
 }
+
+export type ReminderWithNotifications = Prisma.ReminderGetPayload<{
+  include: { notifications: true };
+}>;

@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, Reminder, ReminderStatus } from '@/generated/prisma/client';
+import type { ReminderWithNotifications } from './types';
 
 export type ReminderDatabase = PrismaClient | Prisma.TransactionClient;
 
@@ -24,6 +25,13 @@ export class ReminderRepository {
 
   findById(id: string): Promise<Reminder | null> {
     return this.db.reminder.findUnique({ where: { id } });
+  }
+
+  findByIdWithNotifications(id: string): Promise<ReminderWithNotifications | null> {
+    return this.db.reminder.findUnique({
+      where: { id },
+      include: { notifications: { orderBy: [{ scheduledFor: 'desc' }, { createdAt: 'desc' }] } },
+    });
   }
 
   listActive(): Promise<Reminder[]> {

@@ -247,3 +247,63 @@ button { cursor: pointer; }
   .page-header { gap: 16px; margin-bottom: 24px; }.page-header h1 { font-size: 28px; }.page-header__action { width: 100%; }.page-header { flex-direction: column; }.page-header__action .button { width: 100%; }
   .drawer { width: 100%; border-radius: 0; }.drawer__header { padding: 20px 16px; }.drawer__content { padding: 24px 16px; }
 }
+
+.button { gap: 8px; }
+
+.reminders-page { width: 100%; max-width: 1440px; margin: 0 auto; }
+.reminders-groups { display: grid; gap: 36px; }
+.reminder-group { min-width: 0; }
+.reminder-group__header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.reminder-group__header h2 { margin: 0; font-size: 21px; line-height: 1.25; }
+.reminder-group__header > span { min-width: 24px; padding: 2px 7px; border-radius: 999px; background: var(--surface-subtle); color: var(--text-secondary); font-size: 13px; text-align: center; }
+.reminder-columns, .reminder-row { display: grid; grid-template-columns: minmax(190px, 1.45fr) minmax(125px, .8fr) minmax(135px, .85fr) minmax(210px, 1.25fr) 44px; gap: 18px; align-items: center; }
+.reminder-columns { padding: 0 16px 8px 20px; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.reminder-group__rows { border-top: 1px solid var(--border); }
+.reminder-row { position: relative; min-height: 76px; padding: 14px 16px 14px 20px; border-bottom: 1px solid var(--border); }
+.reminder-row__rail { position: absolute; inset: 12px auto 12px 0; width: 4px; border-radius: 0 4px 4px 0; background: var(--safe); }
+.reminder-row--overdue .reminder-row__rail { background: var(--overdue); }
+.reminder-row--urgent .reminder-row__rail { background: var(--urgent); }
+.reminder-row--soon .reminder-row__rail { background: var(--soon); }
+.reminder-row__name, .reminder-row__field { display: grid; min-width: 0; gap: 4px; }
+.reminder-row__name > strong { overflow-wrap: anywhere; font-size: 15px; }
+.reminder-row__urgency { width: fit-content; font-size: 13px; font-weight: 650; }
+.reminder-row__urgency--overdue { color: var(--overdue); }
+.reminder-row__urgency--urgent { color: #d52f24; }
+.reminder-row__urgency--soon { color: #a35f00; }
+.reminder-row__urgency--safe { color: var(--safe); }
+.reminder-row__field { color: var(--text-secondary); font-size: 14px; line-height: 1.45; }
+.reminder-row__field time { color: var(--text-primary); font-weight: 550; }
+.reminder-row__email { font-size: 13px; }
+.reminder-row__mobile-label { display: none; }
+.reminder-row__menu { display: grid; }
+.reminder-row__menu .button { justify-content: flex-start; min-height: 38px; padding: 8px 10px; font-size: 14px; white-space: nowrap; }
+
+.reminders-empty { display: grid; justify-items: start; max-width: 560px; margin: 96px auto 0; padding: 40px; border: 1px solid var(--border); border-radius: var(--radius-panel); text-align: left; }
+.reminders-empty h2 { margin: 0; font-size: 24px; }
+.reminders-empty p { margin: 12px 0 24px; color: var(--text-secondary); line-height: 1.55; }
+
+.reminder-form { display: grid; gap: 22px; }
+.reminder-form__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; padding-top: 22px; border-top: 1px solid var(--border); }
+
+@media (max-width: 1080px) {
+  .reminder-columns, .reminder-row { grid-template-columns: minmax(165px, 1.25fr) 118px 120px minmax(175px, 1fr) 44px; gap: 12px; }
+}
+
+@media (max-width: 760px) {
+  .reminder-columns { display: none; }
+  .reminder-group__rows { border-top: 0; }
+  .reminder-row { grid-template-columns: 1fr 44px; gap: 12px; padding: 18px 10px 18px 18px; border: 1px solid var(--border); border-radius: var(--radius-panel); }
+  .reminder-row + .reminder-row { margin-top: 10px; }
+  .reminder-row__rail { inset-block: 10px; }
+  .reminder-row__name, .reminder-row__field { grid-column: 1; }
+  .reminder-row > .overflow-menu { grid-column: 2; grid-row: 1; }
+  .reminder-row__mobile-label { display: inline; color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .reminder-row__field { margin-top: 5px; }
+  .reminder-row__email { padding-top: 8px; border-top: 1px solid var(--border); }
+  .reminders-empty { margin-top: 48px; padding: 28px 24px; }
+}
+
+@media (max-width: 560px) {
+  .reminder-form__actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .reminder-form__actions .button { width: 100%; }
+}

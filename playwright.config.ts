@@ -13,7 +13,9 @@ export default defineConfig({
     env: {
       APP_URL: 'http://127.0.0.1:3000',
       AUTH_SECRET: 'test-auth-secret-with-at-least-32-characters',
-      DATABASE_URL: 'postgresql://remindly:remindly@localhost:5432/remindly?schema=public',
+      DATABASE_URL: process.env.E2E_DATABASE_URL
+        ?? process.env.DATABASE_URL
+        ?? 'postgresql://remindly:remindly@localhost:5432/remindly?schema=public',
       NEXTAUTH_URL: 'http://127.0.0.1:3000',
       OWNER_EMAIL: ownerEmail,
       OWNER_PASSWORD_HASH: hashSync(ownerPassword, 4),
