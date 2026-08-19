@@ -152,6 +152,24 @@ async function waitForReconciliationLock() {
 }
 
 describe('processDueNotifications', () => {
+  it('reconciles a missing current ledger row and sends it in the same processor run', async () => {
+    const reminder = await createReminder();
+    const provider = new RecordingEmailProvider();
+
+    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const notifications = await prisma.notification.findMany({ where: { reminderId: reminder.id } });
+
+    expect(result).toEqual({ claimed: 1, sent: 1, failed: 0, recovered: 0 });
+    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls[0]?.idempotencyKey).toBe(notifications[0]?.id);
+    expect(notifications).toMatchObject([{
+      scheduledFor: reminder.alertAt,
+      status: 'SENT',
+      attemptCount: 1,
+    }]);
+    expect(notifications[0]?.idempotencyKey).toBe(notifications[0]?.id);
+  });
+
   it('claims a due row once when two processors run concurrently', async () => {
     const { notification } = await createDueNotification();
     const provider = new RecordingEmailProvider();
