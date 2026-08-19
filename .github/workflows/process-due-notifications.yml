@@ -1,0 +1,37 @@
+name: Process due notifications
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  process-due-notifications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the bounded notification processor
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          SCHEDULER_SECRET: ${{ secrets.SCHEDULER_SECRET }}
+        run: |
+          set -eu
+          test -n "$APP_URL"
+          test -n "$SCHEDULER_SECRET"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_code="$(curl \
+            --show-error \
+            --silent \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "x-scheduler-secret: $SCHEDULER_SECRET" \
+            "${APP_URL%/}/api/internal/process-due-notifications")"
+          cat "$response_file"
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -gt 299 ]; then
+            echo "Notification processor returned HTTP $http_code" >&2
+            exit 1
+          fi

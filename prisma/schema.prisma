@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReminderStatus {
+  ACTIVE
+  DONE
+  ARCHIVED
+}
+
+enum NotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  EMAIL
+}
+
+model Reminder {
+  id               String         @id @default(uuid()) @db.Uuid
+  name             String
+  endDate          DateTime       @map("end_date") @db.Date
+  alertLeadDays    Int            @map("alert_lead_days")
+  alertTime        String         @map("alert_time")
+  alertAt          DateTime       @map("alert_at") @db.Timestamptz(6)
+  status           ReminderStatus @default(ACTIVE)
+  parentReminderId String?        @map("parent_reminder_id") @db.Uuid
+  completedAt      DateTime?      @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent        Reminder?      @relation("ReminderRenewals", fields: [parentReminderId], references: [id], onDelete: Restrict)
+  renewals      Reminder[]     @relation("ReminderRenewals")
+  notifications Notification[]
+
+  @@index([status, endDate])
+  @@index([status, alertAt])
+  @@index([parentReminderId])
+  @@map("reminders")
+}
+
+model Notification {
+  id                  String              @id @default(uuid()) @db.Uuid
+  reminderId          String              @map("reminder_id") @db.Uuid
+  scheduledFor        DateTime            @map("scheduled_for") @db.Timestamptz(6)
+  channel             NotificationChannel @default(EMAIL)
+  status              NotificationStatus @default(PENDING)
+  attemptCount        Int                 @default(0) @map("attempt_count")
+  nextAttemptAt       DateTime?           @map("next_attempt_at") @db.Timestamptz(6)
+  processingStartedAt DateTime?           @map("processing_started_at") @db.Timestamptz(6)
+  idempotencyKey      String              @unique @map("idempotency_key")
+  providerMessageId   String?             @map("provider_message_id")
+  lastError           String?             @map("last_error")
+  sentAt              DateTime?           @map("sent_at") @db.Timestamptz(6)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reminder Reminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  @@unique([reminderId, scheduledFor, channel])
+  @@index([status, nextAttemptAt, scheduledFor])
+  @@map("notifications")
+}
+
+model Settings {
+  /// The PostgreSQL CHECK constraint in migration 20260819020000_enforce_settings_singleton
+  /// restricts this primary key to `singleton`; Prisma schema syntax cannot express CHECK constraints.
+  id               String   @id
+  notificationEmail String  @map("notification_email")
+  timezone         String
+  defaultAlertTime String   @map("default_alert_time")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("settings")
+}
