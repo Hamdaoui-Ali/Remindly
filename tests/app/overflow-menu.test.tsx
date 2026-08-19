@@ -10,10 +10,10 @@ it('opens an ordinary popover, moves focus into it, and restores the trigger on 
 
   await user.click(trigger);
 
-  expect(screen.getByRole('group', { name: 'Reminder actions' })).toBeVisible();
+  expect(screen.getByRole('dialog', { name: 'Reminder actions' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Mark done' })).toHaveFocus();
 
   await user.keyboard('{Escape}');
-  expect(screen.queryByRole('group', { name: 'Reminder actions' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: 'Reminder actions' })).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
 });

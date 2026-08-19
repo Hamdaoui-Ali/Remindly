@@ -39,7 +39,7 @@ export function OverflowMenu({ children, label = 'Reminder actions' }: { childre
       >
         <MoreVertical aria-hidden="true" size={20} strokeWidth={1.75} />
       </button>
-      {open ? <div ref={popoverRef} role="group" aria-label={label} className="overflow-menu__content" onClick={close}>{children}</div> : null}
+      {open ? <div ref={popoverRef} role="dialog" aria-label={label} className="overflow-menu__content" onClick={close}>{children}</div> : null}
     </div>
   );
 }
