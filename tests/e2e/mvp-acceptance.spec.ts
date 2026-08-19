@@ -20,6 +20,8 @@ async function openAddReminder(page: import('@playwright/test').Page) {
 
 test('owner completes the MVP reminder lifecycle', async ({ page, request }) => {
   const name = `Passport renewal acceptance ${Date.now()}`;
+  const safeEndDate = new Date();
+  safeEndDate.setUTCDate(safeEndDate.getUTCDate() + 60);
 
   const health = await request.get('/api/health');
   expect(health.status()).toBe(200);
@@ -35,7 +37,7 @@ test('owner completes the MVP reminder lifecycle', async ({ page, request }) => 
   await page.getByRole('link', { name: 'Reminders', exact: true }).click();
   await openAddReminder(page);
   await page.getByLabel('Name').fill(name);
-  await page.getByLabel('End date').fill('2026-12-01');
+  await page.getByLabel('End date').fill(safeEndDate.toISOString().slice(0, 10));
   await page.getByLabel('Remind me').selectOption('14');
   await page.getByLabel('At', { exact: true }).fill('09:00');
   await page.getByRole('button', { name: /save reminder/i }).click();

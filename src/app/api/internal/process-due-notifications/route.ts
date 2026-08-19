@@ -19,7 +19,23 @@ export function schedulerSecretMatches(
   return timingSafeEqual(providedDigest, expectedDigest);
 }
 
+function configuredSchedulerSecret(): string | null {
+  const value = process.env.SCHEDULER_SECRET;
+  return typeof value === 'string' && value.trim().length >= 16 ? value : null;
+}
+
 export async function POST(request: Request) {
+  const expectedSecret = configuredSchedulerSecret();
+  if (
+    !expectedSecret
+    || !schedulerSecretMatches(
+      request.headers.get('x-scheduler-secret'),
+      expectedSecret,
+    )
+  ) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const runId = randomUUID();
   let env: ReturnType<typeof serverEnv>;
 
@@ -31,13 +47,6 @@ export async function POST(request: Request) {
       { error: 'Notification processing failed' },
       { status: 500 },
     );
-  }
-
-  if (!schedulerSecretMatches(
-    request.headers.get('x-scheduler-secret'),
-    env.SCHEDULER_SECRET,
-  )) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {

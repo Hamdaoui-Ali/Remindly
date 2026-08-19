@@ -4,7 +4,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20.9.0 or newer
 - npm
 - Docker with Docker Compose, or another PostgreSQL instance
 - A Resend API key and verified sender identity for real email delivery
@@ -17,7 +17,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npm install
    ```
 
-2. Copy `.env.example` to `.env.local` and replace every placeholder. Generate secrets locally:
+2. Copy `.env.example` to `.env` and replace every placeholder. Prisma CLI loads `.env` through `prisma.config.ts`, and Next.js also loads it for local development. Generate secrets locally:
 
    ```powershell
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -38,6 +38,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 4. Generate the Prisma client, apply migrations, and seed the singleton owner settings:
 
    ```powershell
+   npx prisma validate
    npm run db:generate
    npx prisma migrate deploy
    npx prisma db seed
@@ -102,7 +103,7 @@ The workflow in `.github/workflows/process-due-notifications.yml` calls the proc
 - `APP_URL`: the canonical deployed origin, such as `https://remindly.example.com`
 - `SCHEDULER_SECRET`: the same random value deployed as the application's `SCHEDULER_SECRET`
 
-The workflow uses `curl --fail-with-body`, so authentication failures and other non-2xx responses fail visibly in Actions. GitHub scheduled workflows are best effort; the processor's due-time query recovers work after delayed or missed triggers.
+The workflow captures the response status and explicitly accepts only HTTP 200–299. Redirects, authentication failures, and all other responses fail visibly in Actions. GitHub scheduled workflows are best effort; the processor's due-time query recovers work after delayed or missed triggers.
 
 ## Production environment
 

@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   databaseProbe,
@@ -38,11 +38,16 @@ const environment = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  vi.stubEnv('SCHEDULER_SECRET', environment.SCHEDULER_SECRET);
   databaseProbe.mockReset();
   processDueNotifications.mockReset();
   resendProvider.mockReset();
   serverEnv.mockReset();
   serverEnv.mockReturnValue(environment);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('GET /api/health', () => {
@@ -84,9 +89,47 @@ describe('POST /api/internal/process-due-notifications', () => {
 
       expect(response.status).toBe(401);
       await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' });
+      expect(serverEnv).not.toHaveBeenCalled();
       expect(processDueNotifications).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects requests when the scheduler secret is not configured before parsing unrelated settings', async () => {
+    vi.stubEnv('SCHEDULER_SECRET', undefined);
+
+    const response = await processNotifications(new Request(
+      'http://localhost/api/internal/process-due-notifications',
+      {
+        method: 'POST',
+        headers: { 'x-scheduler-secret': environment.SCHEDULER_SECRET },
+      },
+    ));
+
+    expect(response.status).toBe(401);
+    expect(serverEnv).not.toHaveBeenCalled();
+    expect(processDueNotifications).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes unrelated configuration failures only after scheduler authentication', async () => {
+    serverEnv.mockImplementationOnce(() => {
+      throw new Error('missing database password');
+    });
+
+    const response = await processNotifications(new Request(
+      'http://localhost/api/internal/process-due-notifications',
+      {
+        method: 'POST',
+        headers: { 'x-scheduler-secret': environment.SCHEDULER_SECRET },
+      },
+    ));
+
+    expect(serverEnv).toHaveBeenCalledOnce();
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Notification processing failed',
+    });
+    expect(processDueNotifications).not.toHaveBeenCalled();
+  });
 
   it('uses the configured provider and bounded batch, then returns processor counts', async () => {
     const provider = { send: vi.fn() };

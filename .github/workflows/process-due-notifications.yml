@@ -20,10 +20,18 @@ jobs:
           set -eu
           test -n "$APP_URL"
           test -n "$SCHEDULER_SECRET"
-          curl \
-            --fail-with-body \
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_code="$(curl \
             --show-error \
             --silent \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
             --request POST \
             --header "x-scheduler-secret: $SCHEDULER_SECRET" \
-            "${APP_URL%/}/api/internal/process-due-notifications"
+            "${APP_URL%/}/api/internal/process-due-notifications")"
+          cat "$response_file"
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -gt 299 ]; then
+            echo "Notification processor returned HTTP $http_code" >&2
+            exit 1
+          fi
