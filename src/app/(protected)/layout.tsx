@@ -4,5 +4,5 @@ import { requireOwner } from '@/server/auth/require-owner';
 export default async function ProtectedLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const owner = await requireOwner();
 
-  return <AppShell ownerEmail={owner.email}>{children}</AppShell>;
+  return <AppShell ownerEmail={owner.email}><div className="protected-route">{children}</div></AppShell>;
 }

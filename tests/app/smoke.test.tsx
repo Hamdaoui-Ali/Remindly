@@ -1,7 +1,20 @@
 import { render, screen } from '@testing-library/react';
+import { vi } from 'vitest';
 import HomePage from '@/app/(protected)/page';
 
-it('renders the Remindly loading shell', () => {
-  render(<HomePage />);
-  expect(screen.getByText('Remindly')).toBeVisible();
+vi.mock('@/server/dashboard/queries', () => ({
+  getDashboardData: vi.fn().mockResolvedValue({
+    timezone: 'Africa/Casablanca',
+    generatedForLocalDate: '2026-08-19',
+    summary: { activeReminders: 0, overdue: 0, dueInSevenDays: 0, sentThisMonth: 0 },
+    attention: [],
+    urgencyCounts: { OVERDUE: 0, URGENT: 0, SOON: 0, SAFE: 0 },
+    completedVsRenewed: [],
+    nextThirtyDays: [],
+  }),
+}));
+
+it('renders the operational dashboard', async () => {
+  render(await HomePage());
+  expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 });

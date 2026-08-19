@@ -1,12 +1,8 @@
-import Link from 'next/link';
+import { DashboardPage } from '@/components/dashboard/dashboard-page';
+import { getDashboardData } from '@/server/dashboard/queries';
 
-export default function HomePage() {
-  return (
-    <main className="loading-shell" aria-labelledby="page-title">
-      <p className="wordmark">Remindly</p>
-      <h1 id="page-title">Your reminder workspace is loading.</h1>
-      <p>Preparing your private dashboard.</p>
-      <Link href="/login">Go to login</Link>
-    </main>
-  );
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage() {
+  return <DashboardPage data={await getDashboardData(new Date())} />;
 }
