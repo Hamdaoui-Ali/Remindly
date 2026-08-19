@@ -66,6 +66,8 @@ Accepted references:
 - `npm run lint` — PASS
 - `npm run test:e2e` — PASS, 9 tests after removing the ignored screenshot-only `.env.local`
 
+The default `npm test` script now includes `--maxWorkers=1`, preserving the deterministic execution mode required by integration suites that share the singleton Settings row.
+
 ## Remaining risks
 
 - The in-app Browser was unavailable, so the rendered gate used the explicitly permitted Playwright Chromium fallback. Firefox, WebKit, and extension-backed browser sessions were not tested.

@@ -57,7 +57,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 Run the non-browser checks:
 
 ```powershell
-npm test -- --maxWorkers=1
+npm test
 npm run lint
 npx tsc --noEmit
 npm run build
@@ -70,7 +70,7 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
-Serial Vitest execution avoids contention between integration files that share the singleton settings row.
+The default Vitest script runs serially to avoid contention between integration files that share the singleton settings row.
 
 ## Operations contract
 
