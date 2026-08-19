@@ -64,7 +64,7 @@ a:hover { color: var(--primary-hover); }
 .loading-shell p { margin: 0; color: var(--text-secondary); }
 
 .wordmark {
-  color: var(--text-primary) !important;
+  color: var(--text-primary);
   font-family: var(--font-ibm-plex-mono), monospace;
   font-weight: 600;
   letter-spacing: -0.04em;
