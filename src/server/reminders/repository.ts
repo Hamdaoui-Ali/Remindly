@@ -41,7 +41,10 @@ export class ReminderRepository {
     return this.db.reminder.update({ where: { id }, data: patch });
   }
 
-  setStatus(id: string, status: ReminderStatus, completedAt: Date | null = null): Promise<Reminder> {
-    return this.db.reminder.update({ where: { id }, data: { status, completedAt } });
+  setStatus(id: string, status: ReminderStatus, completedAt?: Date | null): Promise<Reminder> {
+    return this.db.reminder.update({
+      where: { id },
+      data: { status, ...(completedAt === undefined ? {} : { completedAt }) },
+    });
   }
 }

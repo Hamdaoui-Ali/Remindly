@@ -61,6 +61,14 @@ export class NotificationRepository {
     return this.db.notification.create({ data: input });
   }
 
+  findPendingForReminderIds(reminderIds: string[]): Promise<Notification[]> {
+    if (reminderIds.length === 0) return Promise.resolve([]);
+    return this.db.notification.findMany({
+      where: { reminderId: { in: reminderIds }, status: 'PENDING' },
+      orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
   async cancelPendingForReminder(
     reminderId: string,
     transition: NotificationStatusTransition,
