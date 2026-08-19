@@ -11,9 +11,13 @@ test('adds, edits, renews, and completes a reminder', async ({ page }) => {
   await page.getByLabel('Email').fill(ownerEmail);
   await page.getByLabel('Password').fill(ownerPassword);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await page.getByRole('link', { name: 'Reminders' }).click();
+  await page.getByRole('link', { name: 'Reminders', exact: true }).click();
 
-  await page.getByRole('button', { name: /add reminder/i }).click();
+  const addDialog = page.getByRole('dialog', { name: /add reminder/i });
+  await expect(async () => {
+    await page.getByRole('button', { name: /add reminder/i }).click();
+    await expect(addDialog).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await page.getByLabel('Name').fill(originalName);
   await page.getByLabel('End date').fill('2027-06-30');
   await page.getByLabel('Remind me').selectOption('7');

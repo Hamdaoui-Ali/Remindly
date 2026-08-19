@@ -6,6 +6,7 @@ const ownerPassword = process.env.E2E_OWNER_PASSWORD ?? 'correct-password';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  workers: 1,
   webServer: {
     command: 'npm run dev -- --hostname 127.0.0.1',
     url: 'http://127.0.0.1:3000/login',
@@ -20,6 +21,7 @@ export default defineConfig({
       OWNER_EMAIL: ownerEmail,
       OWNER_PASSWORD_HASH: hashSync(ownerPassword, 4),
       RESEND_API_KEY: 're_test',
+      RESEND_FROM: 'Remindly <notifications@example.com>',
       SCHEDULER_SECRET: 'test-scheduler-secret',
     },
   },

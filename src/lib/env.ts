@@ -10,6 +10,7 @@ const envSchema = authEnvSchema.extend({
   OWNER_PASSWORD_HASH: z.string().min(1),
   SCHEDULER_SECRET: z.string().min(16),
   RESEND_API_KEY: z.string().min(1),
+  RESEND_FROM: z.string().min(1),
   APP_URL: z.string().url(),
   NEXTAUTH_URL: z.string().url().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

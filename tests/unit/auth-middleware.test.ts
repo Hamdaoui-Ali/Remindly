@@ -104,6 +104,19 @@ describe('authentication middleware', () => {
     expect(response.headers.get('x-middleware-next')).toBe('1');
   });
 
+  it('passes the internal processor to its scheduler-secret boundary', async () => {
+    vi.stubEnv('AUTH_SECRET', undefined);
+    vi.stubEnv('OWNER_EMAIL', undefined);
+
+    const response = await middleware(new NextRequest(
+      'http://localhost/api/internal/process-due-notifications',
+      { method: 'POST' },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+  });
+
   it('keeps the Auth.js protocol endpoint public', async () => {
     vi.stubEnv('AUTH_SECRET', undefined);
     vi.stubEnv('OWNER_EMAIL', undefined);

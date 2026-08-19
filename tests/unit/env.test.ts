@@ -10,6 +10,7 @@ describe('parseServerEnv', () => {
       OWNER_PASSWORD_HASH: '',
       SCHEDULER_SECRET: 's'.repeat(16),
       RESEND_API_KEY: 're_test',
+      RESEND_FROM: 'Remindly <notifications@example.com>',
       APP_URL: 'http://localhost:3000',
       NODE_ENV: 'test',
     })).toThrow('OWNER_PASSWORD_HASH');

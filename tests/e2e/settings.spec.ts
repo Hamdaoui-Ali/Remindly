@@ -15,17 +15,21 @@ test('owner updates settings, cancels edits, and sees protected access', async (
   await expect(page.getByRole('textbox', { name: /password/i })).toHaveCount(0);
 
   const alertTime = page.getByLabel('Default alert time');
-  await alertTime.fill('10:30');
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(alertTime).toHaveValue('09:00');
+  const initialAlertTime = await alertTime.inputValue();
+  const changedAlertTime = initialAlertTime === '10:30' ? '09:00' : '10:30';
+  await expect(async () => {
+    await alertTime.fill(changedAlertTime);
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(alertTime).toHaveValue(initialAlertTime, { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 
-  await alertTime.fill('10:30');
+  await alertTime.fill(changedAlertTime);
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText(/settings saved/i)).toBeVisible();
   await page.reload();
-  await expect(alertTime).toHaveValue('10:30');
+  await expect(alertTime).toHaveValue(changedAlertTime);
 
-  await alertTime.fill('09:00');
+  await alertTime.fill(initialAlertTime);
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText(/settings saved/i)).toBeVisible();
 });

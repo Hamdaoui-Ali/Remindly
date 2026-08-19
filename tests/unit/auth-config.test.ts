@@ -21,6 +21,7 @@ describe('verifyOwnerCredentials', () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://localhost/remindly');
     vi.stubEnv('SCHEDULER_SECRET', 'test-scheduler-secret');
     vi.stubEnv('RESEND_API_KEY', 're_test');
+    vi.stubEnv('RESEND_FROM', 'Remindly <notifications@example.com>');
     vi.stubEnv('APP_URL', 'http://localhost:3000');
     vi.stubEnv('NODE_ENV', 'test');
     compareSpy.mockClear();

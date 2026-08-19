@@ -8,11 +8,16 @@ import { sessionCookieName } from '@/server/auth/session-cookie';
 const PUBLIC_PAGE = '/login';
 const PUBLIC_API = '/api/health';
 const AUTH_API_PREFIX = '/api/auth/';
+const SCHEDULER_API = '/api/internal/process-due-notifications';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === PUBLIC_API || pathname.startsWith(AUTH_API_PREFIX)) {
+  if (
+    pathname === PUBLIC_API
+    || pathname === SCHEDULER_API
+    || pathname.startsWith(AUTH_API_PREFIX)
+  ) {
     return NextResponse.next();
   }
 
