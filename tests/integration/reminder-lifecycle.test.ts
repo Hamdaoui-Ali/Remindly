@@ -75,6 +75,62 @@ async function createFixture(overrides: Parameters<typeof input>[1] = {}) {
   return service.createReminder(input(`Lifecycle reminder ${crypto.randomUUID()}`, overrides), NOW);
 }
 
+async function createHistoricalNotifications(reminderId: string, scheduledFor: Date) {
+  return Promise.all([
+    prisma.notification.create({
+      data: {
+        reminderId,
+        scheduledFor: new Date(scheduledFor.getTime() - 120_000),
+        channel: 'EMAIL',
+        status: 'FAILED',
+        idempotencyKey: crypto.randomUUID(),
+        lastError: 'Provider timed out',
+      },
+    }),
+    prisma.notification.create({
+      data: {
+        reminderId,
+        scheduledFor: new Date(scheduledFor.getTime() - 180_000),
+        channel: 'EMAIL',
+        status: 'PROCESSING',
+        idempotencyKey: crypto.randomUUID(),
+        processingStartedAt: NOW,
+      },
+    }),
+  ]);
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((next) => { resolve = next; });
+  return { promise, resolve };
+}
+
+async function lockReminderRow(id: string) {
+  const locked = deferred();
+  const release = deferred();
+  const finished = prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM reminders WHERE id = ${id}::uuid FOR UPDATE`;
+    locked.resolve();
+    await release.promise;
+  });
+  await locked.promise;
+  return { release, finished };
+}
+
+async function waitForBlockedReminderUpdates(count: number) {
+  await expect.poll(async () => {
+    const rows = await prisma.$queryRaw<Array<{ waiting: bigint }>>`
+      SELECT count(*)::bigint AS waiting
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND wait_event_type = 'Lock'
+        AND query LIKE ${'%UPDATE%reminders%'}
+    `;
+    return Number(rows[0]?.waiting ?? 0n);
+  }, { timeout: 5_000, interval: 20 }).toBeGreaterThanOrEqual(count);
+}
+
 describe('ReminderService lifecycle', () => {
   it('creates one active reminder and one pending notification atomically', async () => {
     const cycle = await createFixture();
@@ -114,6 +170,10 @@ describe('ReminderService lifecycle', () => {
 
   it('replaces only the pending row when a schedule changes', async () => {
     const cycle = await createFixture();
+    const [failed, processing] = await createHistoricalNotifications(
+      cycle.reminder.id,
+      cycle.notification.scheduledFor,
+    );
 
     await service.updateReminder(cycle.reminder.id, { endDate: '2027-01-01' }, NOW);
     const rows = await prisma.notification.findMany({
@@ -121,8 +181,11 @@ describe('ReminderService lifecycle', () => {
       orderBy: { createdAt: 'asc' },
     });
 
-    expect(rows.map((row) => row.status)).toEqual(['CANCELLED', 'PENDING']);
-    expect(rows[1]?.scheduledFor.getTime()).not.toBe(rows[0]?.scheduledFor.getTime());
+    const lifecycleRows = rows.filter((row) => row.status === 'CANCELLED' || row.status === 'PENDING');
+    expect(lifecycleRows.map((row) => row.status)).toEqual(['CANCELLED', 'PENDING']);
+    expect(lifecycleRows[1]?.scheduledFor.getTime()).not.toBe(lifecycleRows[0]?.scheduledFor.getTime());
+    expect(await prisma.notification.findUnique({ where: { id: failed.id } })).toMatchObject({ status: 'FAILED' });
+    expect(await prisma.notification.findUnique({ where: { id: processing.id } })).toMatchObject({ status: 'PROCESSING' });
   });
 
   it('allows a past reminder date and creates its pending email', async () => {
@@ -144,6 +207,10 @@ describe('ReminderService lifecycle', () => {
         sentAt: NOW,
       },
     });
+    const [failed, processing] = await createHistoricalNotifications(
+      cycle.reminder.id,
+      cycle.notification.scheduledFor,
+    );
 
     const completed = await service.completeReminder(cycle.reminder.id, NOW);
 
@@ -152,10 +219,16 @@ describe('ReminderService lifecycle', () => {
       .toMatchObject({ status: 'CANCELLED' });
     expect(await prisma.notification.findUnique({ where: { id: historical.id } }))
       .toMatchObject({ status: 'SENT' });
+    expect(await prisma.notification.findUnique({ where: { id: failed.id } })).toMatchObject({ status: 'FAILED' });
+    expect(await prisma.notification.findUnique({ where: { id: processing.id } })).toMatchObject({ status: 'PROCESSING' });
   });
 
   it('archives an active source and creates a linked child cycle', async () => {
     const source = await createFixture();
+    const [failed, processing] = await createHistoricalNotifications(
+      source.reminder.id,
+      source.notification.scheduledFor,
+    );
     const childName = `Renewed reminder ${crypto.randomUUID()}`;
     fixtureNames.push(childName);
 
@@ -165,6 +238,8 @@ describe('ReminderService lifecycle', () => {
       .toMatchObject({ status: 'ARCHIVED' });
     expect(await prisma.notification.findUnique({ where: { id: source.notification.id } }))
       .toMatchObject({ status: 'CANCELLED' });
+    expect(await prisma.notification.findUnique({ where: { id: failed.id } })).toMatchObject({ status: 'FAILED' });
+    expect(await prisma.notification.findUnique({ where: { id: processing.id } })).toMatchObject({ status: 'PROCESSING' });
     expect(cycle.reminder).toMatchObject({ status: 'ACTIVE', parentReminderId: source.reminder.id });
     expect(cycle.notification).toMatchObject({ reminderId: cycle.reminder.id, status: 'PENDING' });
   });
@@ -218,5 +293,41 @@ describe('ReminderService lifecycle', () => {
         scheduledEmail: expect.objectContaining({ id: cycle.notification.id, status: 'PENDING' }),
       }),
     ]));
+  });
+
+  it('does not create a pending replacement when completion wins a concurrent schedule edit', async () => {
+    const cycle = await createFixture();
+    const lock = await lockReminderRow(cycle.reminder.id);
+    const completion = service.completeReminder(cycle.reminder.id, NOW);
+    await waitForBlockedReminderUpdates(1);
+    const scheduleEdit = service.updateReminder(cycle.reminder.id, { endDate: '2027-01-01' }, NOW);
+    await waitForBlockedReminderUpdates(2);
+    lock.release.resolve();
+    await lock.finished;
+
+    await expect(completion).resolves.toMatchObject({ status: 'DONE' });
+    await expect(scheduleEdit).rejects.toThrow('state changed');
+    expect(await prisma.reminder.findUnique({ where: { id: cycle.reminder.id } }))
+      .toMatchObject({ status: 'DONE' });
+    expect(await prisma.notification.count({
+      where: { reminderId: cycle.reminder.id, status: 'PENDING' },
+    })).toBe(0);
+  });
+
+  it('creates only one child when two renewals race from the same source', async () => {
+    const source = await createFixture();
+    const firstChild = input(`First racing renewal ${crypto.randomUUID()}`);
+    const secondChild = input(`Second racing renewal ${crypto.randomUUID()}`);
+    const lock = await lockReminderRow(source.reminder.id);
+    const first = service.renewReminder(source.reminder.id, firstChild, NOW);
+    await waitForBlockedReminderUpdates(1);
+    const second = service.renewReminder(source.reminder.id, secondChild, NOW);
+    await waitForBlockedReminderUpdates(2);
+    lock.release.resolve();
+    await lock.finished;
+
+    await expect(first).resolves.toMatchObject({ reminder: { parentReminderId: source.reminder.id } });
+    await expect(second).rejects.toThrow('state changed');
+    expect(await prisma.reminder.count({ where: { parentReminderId: source.reminder.id } })).toBe(1);
   });
 });

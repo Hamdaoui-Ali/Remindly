@@ -93,6 +93,10 @@ function requireReminder(reminder: Reminder | null): Reminder {
   return reminder;
 }
 
+function requireActiveTransition(count: number): void {
+  if (count !== 1) throw new ReminderLifecycleError('Reminder state changed; retry the request');
+}
+
 export class ReminderService {
   createReminder(input: CreateReminderInput, now: Date): Promise<ReminderCycle> {
     void now;
@@ -117,7 +121,7 @@ export class ReminderService {
       const scheduleChanged = next.validated.endDate !== dateOnly(current.endDate)
         || next.validated.leadDays !== current.alertLeadDays
         || next.validated.alertTime !== current.alertTime;
-      const updated = await reminders.update(id, {
+      requireActiveTransition(await reminders.updateWhenStatus(id, ['ACTIVE'], {
         name: next.validated.name,
         ...(scheduleChanged
           ? {
@@ -125,15 +129,15 @@ export class ReminderService {
               alertLeadDays: next.validated.leadDays,
               alertTime: next.validated.alertTime,
               alertAt: next.alertAt,
-            }
+          }
           : {}),
-      });
+      }));
 
       if (scheduleChanged) {
         await cancelPendingEmailNotifications(tx, current.id);
         await createPendingEmailNotification(tx, current.id, next.alertAt);
       }
-      return updated;
+      return requireReminder(await reminders.findById(id));
     });
   }
 
@@ -142,9 +146,12 @@ export class ReminderService {
       const reminders = new ReminderRepository(tx);
       const current = requireReminder(await reminders.findById(id));
       assertCompletable(current);
-      const completed = await reminders.setStatus(id, 'DONE', now);
+      requireActiveTransition(await reminders.updateWhenStatus(id, ['ACTIVE'], {
+        status: 'DONE',
+        completedAt: now,
+      }));
       await cancelPendingEmailNotifications(tx, id);
-      return completed;
+      return requireReminder(await reminders.findById(id));
     });
   }
 
@@ -154,7 +161,9 @@ export class ReminderService {
       const reminders = new ReminderRepository(tx);
       const source = requireReminder(await reminders.findById(id));
       assertRenewable(source);
-      await reminders.setStatus(source.id, 'ARCHIVED');
+      requireActiveTransition(await reminders.updateWhenStatus(source.id, [source.status], {
+        status: 'ARCHIVED',
+      }));
       await cancelPendingEmailNotifications(tx, source.id);
       return this.createCycle(tx, input, source.id);
     });

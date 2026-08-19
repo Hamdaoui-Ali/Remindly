@@ -41,6 +41,18 @@ export class ReminderRepository {
     return this.db.reminder.update({ where: { id }, data: patch });
   }
 
+  async updateWhenStatus(
+    id: string,
+    expectedStatuses: ReminderStatus[],
+    patch: Prisma.ReminderUpdateManyMutationInput,
+  ): Promise<number> {
+    const result = await this.db.reminder.updateMany({
+      where: { id, status: { in: expectedStatuses } },
+      data: patch,
+    });
+    return result.count;
+  }
+
   setStatus(id: string, status: ReminderStatus, completedAt?: Date | null): Promise<Reminder> {
     return this.db.reminder.update({
       where: { id },
