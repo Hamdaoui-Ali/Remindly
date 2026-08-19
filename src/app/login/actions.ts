@@ -1,16 +1,10 @@
-'use server';
+'use client';
 
-import { redirect } from 'next/navigation';
-import { z } from 'zod';
-
-import { signInOwner } from '@/auth';
+import { signIn } from 'next-auth/react';
 
 const GENERIC_LOGIN_ERROR = 'Unable to sign in with those credentials.';
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type LoginState = {
   error: string | null;
@@ -22,22 +16,10 @@ export async function loginAction(
   previousState: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const result = loginSchema.safeParse({
-    email: formData.get('email'),
-    password: formData.get('password'),
-  });
+  const email = formData.get('email');
+  const password = formData.get('password');
 
-  if (!result.success) {
-    const firstField = result.error.issues[0]?.path[0];
-
-    return {
-      error: GENERIC_LOGIN_ERROR,
-      field: firstField === 'password' ? 'password' : 'email',
-      attempt: previousState.attempt + 1,
-    };
-  }
-
-  if (!(await signInOwner(result.data.email, result.data.password))) {
+  if (typeof email !== 'string' || !EMAIL_PATTERN.test(email)) {
     return {
       error: GENERIC_LOGIN_ERROR,
       field: 'email',
@@ -45,5 +27,37 @@ export async function loginAction(
     };
   }
 
-  redirect('/');
+  if (typeof password !== 'string' || password.length === 0) {
+    return {
+      error: GENERIC_LOGIN_ERROR,
+      field: 'password',
+      attempt: previousState.attempt + 1,
+    };
+  }
+
+  try {
+    const result = await signIn('credentials', {
+      email,
+      password,
+      callbackUrl: '/',
+      redirect: false,
+    });
+
+    if (!result?.ok) {
+      return {
+        error: GENERIC_LOGIN_ERROR,
+        field: 'email',
+        attempt: previousState.attempt + 1,
+      };
+    }
+
+    window.location.assign(result.url ?? '/');
+    return { error: null, field: null, attempt: previousState.attempt };
+  } catch {
+    return {
+      error: GENERIC_LOGIN_ERROR,
+      field: 'email',
+      attempt: previousState.attempt + 1,
+    };
+  }
 }

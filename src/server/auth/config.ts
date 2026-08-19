@@ -11,16 +11,15 @@ import {
 
 export async function verifyOwnerCredentials(email: string, password: string) {
   const env = serverEnv();
-
-  if (email !== env.OWNER_EMAIL) {
-    return false;
-  }
+  let passwordMatches = false;
 
   try {
-    return await compare(password, env.OWNER_PASSWORD_HASH);
+    passwordMatches = await compare(password, env.OWNER_PASSWORD_HASH);
   } catch {
-    return false;
+    passwordMatches = false;
   }
+
+  return email === env.OWNER_EMAIL && passwordMatches;
 }
 
 export function getAuthOptions(): NextAuthOptions {

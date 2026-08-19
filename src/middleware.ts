@@ -2,27 +2,42 @@ import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { parseAuthEnv, type AuthEnv } from '@/lib/env';
 import { sessionCookieName } from '@/server/auth/session-cookie';
 
 const PUBLIC_PAGE = '/login';
 const PUBLIC_API = '/api/health';
+const AUTH_API_PREFIX = '/api/auth/';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === PUBLIC_API) {
+  if (pathname === PUBLIC_API || pathname.startsWith(AUTH_API_PREFIX)) {
     return NextResponse.next();
   }
 
-  const secret = process.env.AUTH_SECRET;
-  const token = secret
-    ? await getToken({
+  let authConfig: AuthEnv | null = null;
+  let token = null;
+
+  try {
+    authConfig = parseAuthEnv(process.env);
+  } catch {
+    authConfig = null;
+  }
+
+  if (authConfig) {
+    try {
+      token = await getToken({
         req: request,
-        secret,
+        secret: authConfig.AUTH_SECRET,
         cookieName: sessionCookieName(),
-      })
-    : null;
-  const isOwner = token?.email === process.env.OWNER_EMAIL;
+      });
+    } catch {
+      token = null;
+    }
+  }
+
+  const isOwner = authConfig !== null && token?.email === authConfig.OWNER_EMAIL;
 
   if (pathname === PUBLIC_PAGE) {
     return isOwner ? NextResponse.redirect(new URL('/', request.url)) : NextResponse.next();
