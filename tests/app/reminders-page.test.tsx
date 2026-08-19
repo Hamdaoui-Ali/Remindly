@@ -17,6 +17,9 @@ type FixtureOverrides = Partial<{
   urgency: 'OVERDUE' | 'URGENT' | 'SOON' | 'SAFE';
   remainingCalendarDays: number;
   scheduledFor: string;
+  scheduledLabel: string;
+  leadDays: number;
+  alertTime: string;
 }>;
 
 function reminder(overrides: FixtureOverrides = {}) {
@@ -25,8 +28,8 @@ function reminder(overrides: FixtureOverrides = {}) {
     id,
     name: overrides.name ?? 'Passport renewal',
     endDate: overrides.endDate ?? '2026-08-18',
-    alertLeadDays: 7,
-    alertTime: '09:00',
+    alertLeadDays: overrides.leadDays ?? 7,
+    alertTime: overrides.alertTime ?? '09:00',
     status: 'ACTIVE' as const,
     parentReminderId: null,
     urgency: overrides.urgency ?? 'OVERDUE' as const,
@@ -38,7 +41,7 @@ function reminder(overrides: FixtureOverrides = {}) {
       scheduledFor: overrides.scheduledFor ?? '2026-08-11T08:00:00.000Z',
       status: 'PENDING' as const,
       channel: 'EMAIL' as const,
-      label: 'Scheduled email Aug 11, 2026, 9:00 AM',
+      label: overrides.scheduledLabel ?? 'Scheduled email Aug 11, 2026, 9:00 AM',
     },
   };
 }
@@ -112,6 +115,48 @@ describe('RemindersPage', () => {
     await waitFor(() => expect(request).toHaveBeenCalledWith('/api/reminders', expect.objectContaining({ method: 'POST' })));
     expect(refresh).toHaveBeenCalledOnce();
     expect(screen.queryByRole('dialog', { name: /add reminder/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add reminder/i })).toHaveFocus();
+  });
+
+  it('applies a schedule-only edit completely and reopens with the new values', async () => {
+    const updated = reminder({
+      leadDays: 14,
+      alertTime: '10:30',
+      scheduledFor: '2026-08-04T09:30:00.000Z',
+      scheduledLabel: 'Scheduled email Aug 4, 2026, 10:30 AM',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ reminder: updated }),
+    }));
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[reminder()]} defaultAlertTime="09:00" timezone="Africa/Casablanca" />);
+
+    const actionTrigger = screen.getByRole('button', { name: /actions for passport renewal/i });
+    await user.click(actionTrigger);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.selectOptions(screen.getByLabelText('Remind me'), '14');
+    fireEvent.change(screen.getByLabelText('At'), { target: { value: '10:30' } });
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText('Scheduled email Aug 4, 2026, 10:30 AM')).toBeVisible();
+    expect(actionTrigger).toHaveFocus();
+    await user.click(actionTrigger);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByLabelText('Remind me')).toHaveValue('14');
+    expect(screen.getByLabelText('At')).toHaveValue('10:30');
+  });
+
+  it('restores focus to the edit trigger when the drawer closes without saving', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[reminder()]} defaultAlertTime="09:00" />);
+    const actionTrigger = screen.getByRole('button', { name: /actions for passport renewal/i });
+
+    await user.click(actionTrigger);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(actionTrigger).toHaveFocus();
   });
 
   it('preserves form values and shows an inline alert after an unknown failure', async () => {

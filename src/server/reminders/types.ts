@@ -24,6 +24,11 @@ export interface ReminderCycle {
   notification: Notification;
 }
 
+export interface ReminderMutationResult {
+  reminder: Reminder;
+  notification: Notification | null;
+}
+
 export interface ReminderListItem {
   reminder: Reminder;
   urgency: Urgency;

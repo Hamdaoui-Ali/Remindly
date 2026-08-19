@@ -23,3 +23,5 @@ export const reminderInputSchema = reminderFields.superRefine((value, context) =
 export const reminderPatchSchema = reminderFields.partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' })
   .superRefine(validateEndDate);
+
+export const reminderIdSchema = z.string().uuid();

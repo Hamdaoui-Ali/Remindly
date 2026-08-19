@@ -1,5 +1,6 @@
 import { ZodError } from 'zod';
 
+import { Prisma } from '@/generated/prisma/client';
 import { errorResponse, jsonResponse } from '@/lib/http';
 import { ReminderLifecycleError } from '@/server/reminders/service';
 
@@ -20,6 +21,10 @@ export function reminderRouteError(error: unknown) {
       return errorResponse('Reminder not found', 404);
     }
     return errorResponse(error.message, 409);
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    return errorResponse('Reminder conflict', 409);
   }
 
   return errorResponse('Unable to process the reminder request', 500);

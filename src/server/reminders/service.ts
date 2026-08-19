@@ -15,6 +15,7 @@ import type {
   CreateReminderInput,
   ReminderCycle,
   ReminderListItem,
+  ReminderMutationResult,
   ReminderWithNotifications,
   RenewalInput,
   UpdateReminderInput,
@@ -112,7 +113,7 @@ export class ReminderService {
     return withTransaction(async (tx) => this.createCycle(tx, input));
   }
 
-  updateReminder(id: string, patch: UpdateReminderInput, now: Date): Promise<Reminder> {
+  updateReminder(id: string, patch: UpdateReminderInput, now: Date): Promise<ReminderMutationResult> {
     void now;
     return withTransaction(async (tx) => {
       const reminders = new ReminderRepository(tx);
@@ -142,11 +143,17 @@ export class ReminderService {
           : {}),
       }));
 
+      let notification;
       if (scheduleChanged) {
         await cancelPendingEmailNotifications(tx, current.id);
-        await createPendingEmailNotification(tx, current.id, next.alertAt);
+        notification = await createPendingEmailNotification(tx, current.id, next.alertAt);
+      } else {
+        notification = await new NotificationRepository(tx).findForReminderSchedule(current.id, current.alertAt);
       }
-      return requireReminder(await reminders.findById(id));
+      return {
+        reminder: requireReminder(await reminders.findById(id)),
+        notification,
+      };
     });
   }
 
@@ -184,13 +191,14 @@ export class ReminderService {
         new SettingsRepository(tx).getSingleton().then(configuredTimezone),
         new ReminderRepository(tx).listActive(),
       ]);
-      const pending = await new NotificationRepository(tx).findPendingForReminderIds(
-        reminders.map((reminder) => reminder.id),
-      );
-      const pendingByReminder = new Map(pending.map((notification) => [notification.reminderId, notification]));
+      const currentNotifications = await new NotificationRepository(tx).findCurrentForReminders(reminders);
+      const notificationBySchedule = new Map(currentNotifications.map((notification) => [
+        `${notification.reminderId}:${notification.scheduledFor.toISOString()}`,
+        notification,
+      ]));
 
       return reminders.map((reminder) => {
-        const notification = pendingByReminder.get(reminder.id);
+        const notification = notificationBySchedule.get(`${reminder.id}:${reminder.alertAt.toISOString()}`);
         return {
           reminder,
           urgency: calculateUrgency(dateOnly(reminder.endDate), now, timezone),

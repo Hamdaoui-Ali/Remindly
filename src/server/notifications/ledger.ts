@@ -10,8 +10,26 @@ export function createPendingEmailNotification(
   reminderId: string,
   scheduledFor: Date,
 ): Promise<Notification> {
+  return ensurePendingEmailNotification(tx, reminderId, scheduledFor);
+}
+
+async function ensurePendingEmailNotification(
+  tx: Prisma.TransactionClient,
+  reminderId: string,
+  scheduledFor: Date,
+): Promise<Notification> {
+  const notifications = new NotificationRepository(tx);
+  const existing = await notifications.findForReminderSchedule(reminderId, scheduledFor);
+  if (existing) {
+    if (existing.status !== 'CANCELLED') return existing;
+    const reactivated = await notifications.reactivateCancelled(existing.id);
+    if (reactivated) return reactivated;
+    const current = await notifications.findForReminderSchedule(reminderId, scheduledFor);
+    if (current) return current;
+  }
+
   const id = crypto.randomUUID();
-  return new NotificationRepository(tx).createPending({
+  return notifications.createPending({
     id,
     reminderId,
     scheduledFor,

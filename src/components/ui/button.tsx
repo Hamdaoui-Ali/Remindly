@@ -1,11 +1,11 @@
-import type { ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   pending?: boolean;
   variant?: 'primary' | 'secondary' | 'ghost';
 };
 
-export function Button({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   children,
   className = '',
   disabled,
@@ -13,10 +13,11 @@ export function Button({
   type = 'button',
   variant = 'primary',
   ...props
-}: ButtonProps) {
+}, ref) {
   return (
     <button
       {...props}
+      ref={ref}
       type={type}
       disabled={disabled || pending}
       aria-busy={pending || undefined}
@@ -25,4 +26,4 @@ export function Button({
       {pending ? 'Working…' : children}
     </button>
   );
-}
+});

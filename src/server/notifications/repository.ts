@@ -95,6 +95,47 @@ export class NotificationRepository {
     return this.db.notification.create({ data: input });
   }
 
+  findForReminderSchedule(reminderId: string, scheduledFor: Date): Promise<Notification | null> {
+    return this.db.notification.findUnique({
+      where: {
+        reminderId_scheduledFor_channel: {
+          reminderId,
+          scheduledFor,
+          channel: 'EMAIL',
+        },
+      },
+    });
+  }
+
+  findCurrentForReminders(reminders: Array<{ id: string; alertAt: Date }>): Promise<Notification[]> {
+    if (reminders.length === 0) return Promise.resolve([]);
+    return this.db.notification.findMany({
+      where: {
+        OR: reminders.map((reminder) => ({
+          reminderId: reminder.id,
+          scheduledFor: reminder.alertAt,
+          channel: 'EMAIL' as const,
+        })),
+      },
+    });
+  }
+
+  async reactivateCancelled(id: string): Promise<Notification | null> {
+    const updated = await this.db.notification.updateMany({
+      where: { id, status: 'CANCELLED' },
+      data: {
+        status: 'PENDING',
+        attemptCount: 0,
+        nextAttemptAt: null,
+        processingStartedAt: null,
+        providerMessageId: null,
+        lastError: null,
+        sentAt: null,
+      },
+    });
+    return updated.count === 1 ? this.db.notification.findUnique({ where: { id } }) : null;
+  }
+
   findPendingForReminderIds(reminderIds: string[]): Promise<Notification[]> {
     if (reminderIds.length === 0) return Promise.resolve([]);
     return this.db.notification.findMany({

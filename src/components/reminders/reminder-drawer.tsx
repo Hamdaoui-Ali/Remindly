@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, type RefObject } from 'react';
 
 import { reminderRequest, ReminderRequestError } from '@/app/(protected)/reminders/actions';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Drawer } from '@/components/ui/drawer';
 import { Field } from '@/components/ui/field';
 import { InlineNotice } from '@/components/ui/inline-notice';
 import { Select } from '@/components/ui/select';
-import type { ReminderListPresentation, ReminderPresentation } from '@/server/reminders/presenters';
+import type { ReminderListPresentation } from '@/server/reminders/presenters';
 import { calculateAlertAt } from '@/server/urgency/scheduling';
 
 export type DrawerMode = 'add' | 'edit' | 'renew';
@@ -17,10 +17,11 @@ type ReminderDrawerProps = {
   defaultAlertTime: string;
   mode: DrawerMode;
   onClose: () => void;
-  onSaved: (mode: DrawerMode, reminder: ReminderPresentation) => void;
+  onSaved: (mode: DrawerMode, reminder: ReminderListPresentation) => void;
   open: boolean;
   reminder: ReminderListPresentation | null;
   timezone: string;
+  returnFocusRef: RefObject<HTMLElement | null>;
 };
 
 type FormValues = {
@@ -73,12 +74,11 @@ function alertAlreadyDue(values: FormValues, timezone: string) {
   }
 }
 
-export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open, reminder, timezone }: ReminderDrawerProps) {
+export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open, reminder, returnFocusRef, timezone }: ReminderDrawerProps) {
   const [values, setValues] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime));
   const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({});
   const [requestError, setRequestError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const nameRef = useRef<HTMLInputElement>(null);
   const warning = useMemo(() => alertAlreadyDue(values, timezone), [timezone, values]);
   const title = mode === 'add' ? 'Add reminder' : mode === 'edit' ? 'Edit reminder' : 'Renew reminder';
   const submitLabel = mode === 'add' ? 'Save reminder' : mode === 'edit' ? 'Save changes' : 'Renew reminder';
@@ -110,10 +110,10 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
     setPending(true);
     try {
       if (mode === 'edit') {
-        const result = await reminderRequest<{ reminder: ReminderPresentation }>(url, 'PATCH', body);
+        const result = await reminderRequest<{ reminder: ReminderListPresentation }>(url, 'PATCH', body);
         onSaved(mode, result.reminder);
       } else {
-        const result = await reminderRequest<{ cycle: { reminder: ReminderPresentation } }>(url, 'POST', body);
+        const result = await reminderRequest<{ cycle: { reminder: ReminderListPresentation } }>(url, 'POST', body);
         onSaved(mode, result.cycle.reminder);
       }
     } catch (error) {
@@ -133,11 +133,10 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
   };
 
   return (
-    <Drawer open={open} onClose={onClose} title={title} initialFocusRef={nameRef}>
+    <Drawer open={open} onClose={onClose} title={title} initialFocusRef={returnFocusRef}>
       <form className="reminder-form" onSubmit={submit} noValidate>
         <Field htmlFor="reminder-name" label="Name" error={errors.name}>
           <input
-            ref={nameRef}
             name="name"
             value={values.name}
             maxLength={120}

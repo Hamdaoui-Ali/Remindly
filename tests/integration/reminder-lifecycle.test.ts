@@ -307,6 +307,43 @@ describe('ReminderService lifecycle', () => {
     ]));
   });
 
+  it.each(['PROCESSING', 'SENT', 'FAILED'] as const)('lists the current %s notification schedule for an active reminder', async (status) => {
+    const cycle = await createFixture({ endDate: '2026-08-21', leadDays: 1 });
+    await prisma.notification.update({
+      where: { id: cycle.notification.id },
+      data: {
+        status,
+        ...(status === 'PROCESSING' ? { processingStartedAt: NOW, attemptCount: 1 } : {}),
+        ...(status === 'SENT' ? { sentAt: NOW, attemptCount: 1 } : {}),
+        ...(status === 'FAILED' ? { lastError: 'Provider unavailable', attemptCount: 1 } : {}),
+      },
+    });
+
+    const item = (await service.listActiveReminders(NOW)).find(({ reminder }) => reminder.id === cycle.reminder.id);
+
+    expect(item?.scheduledEmail).toMatchObject({
+      id: cycle.notification.id,
+      status,
+      scheduledFor: cycle.notification.scheduledFor,
+    });
+  });
+
+  it('reactivates the original cancelled ledger row when a schedule changes A to B to A', async () => {
+    const cycle = await createFixture({ endDate: '2026-12-01', leadDays: 14 });
+
+    await service.updateReminder(cycle.reminder.id, { endDate: '2027-01-01' }, NOW);
+    await service.updateReminder(cycle.reminder.id, { endDate: '2026-12-01' }, NOW);
+    const rows = await prisma.notification.findMany({
+      where: { reminderId: cycle.reminder.id },
+      orderBy: { scheduledFor: 'asc' },
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows.find(({ id }) => id === cycle.notification.id)).toMatchObject({ status: 'PENDING' });
+    expect(rows.filter(({ status }) => status === 'PENDING')).toHaveLength(1);
+    expect(rows.filter(({ status }) => status === 'CANCELLED')).toHaveLength(1);
+  });
+
   it('does not create a pending replacement when completion wins a concurrent schedule edit', async () => {
     const cycle = await createFixture();
     const lock = await lockReminderRow(cycle.reminder.id);

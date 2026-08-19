@@ -1,6 +1,8 @@
 import type { Notification, Reminder } from '@/generated/prisma/client';
-import type { ReminderCycle, ReminderListItem, ReminderWithNotifications } from './types';
+import type { ReminderCycle, ReminderListItem, ReminderMutationResult, ReminderWithNotifications } from './types';
 import type { Urgency } from '@/server/urgency/types';
+import { calendarDayDifference } from '@/server/urgency/calendar';
+import { calculateUrgency } from '@/server/urgency/urgency';
 
 const URGENCY_RANK: Record<Urgency, number> = {
   OVERDUE: 0,
@@ -114,9 +116,30 @@ export function presentReminderHistory(reminder: ReminderWithNotifications) {
   };
 }
 
-export function presentReminderCycle(cycle: ReminderCycle, timezone: string) {
+function mutationListItem(result: ReminderMutationResult, now: Date, timezone: string): ReminderListItem {
+  const endDate = dateOnly(result.reminder.endDate);
   return {
-    reminder: presentReminder(cycle.reminder),
+    reminder: result.reminder,
+    urgency: calculateUrgency(endDate, now, timezone),
+    remainingCalendarDays: calendarDayDifference(endDate, now, timezone),
+    scheduledEmail: result.notification
+      ? {
+          id: result.notification.id,
+          scheduledFor: result.notification.scheduledFor,
+          status: result.notification.status,
+          channel: result.notification.channel,
+        }
+      : null,
+  };
+}
+
+export function presentReminderMutation(result: ReminderMutationResult, timezone: string, now: Date) {
+  return presentReminderListItem(mutationListItem(result, now, timezone), timezone);
+}
+
+export function presentReminderCycle(cycle: ReminderCycle, timezone: string, now = new Date()) {
+  return {
+    reminder: presentReminderMutation(cycle, timezone, now),
     notification: {
       ...presentNotification(cycle.notification),
       label: notificationLabel(cycle.notification.scheduledFor, timezone),

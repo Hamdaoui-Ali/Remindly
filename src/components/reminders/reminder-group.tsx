@@ -6,8 +6,8 @@ import { ReminderRow } from './reminder-row';
 type ReminderGroupProps = {
   label: string;
   onComplete: (reminder: ReminderListPresentation) => void;
-  onEdit: (reminder: ReminderListPresentation) => void;
-  onRenew: (reminder: ReminderListPresentation) => void;
+  onEdit: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
+  onRenew: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
   reminders: ReminderListPresentation[];
   urgency: ReminderListPresentation['urgency'];
 };

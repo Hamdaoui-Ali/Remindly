@@ -2,12 +2,13 @@
 
 import { Button } from '@/components/ui/button';
 import { OverflowMenu } from '@/components/ui/overflow-menu';
+import { useRef } from 'react';
 import type { ReminderListPresentation } from '@/server/reminders/presenters';
 
 type ReminderRowProps = {
   onComplete: (reminder: ReminderListPresentation) => void;
-  onEdit: (reminder: ReminderListPresentation) => void;
-  onRenew: (reminder: ReminderListPresentation) => void;
+  onEdit: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
+  onRenew: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
   reminder: ReminderListPresentation;
 };
 
@@ -28,8 +29,11 @@ function scheduledLabel(reminder: ReminderListPresentation) {
 }
 
 export function ReminderRow({ onComplete, onEdit, onRenew, reminder }: ReminderRowProps) {
+  const rowRef = useRef<HTMLElement>(null);
+  const returnFocus = () => rowRef.current?.querySelector<HTMLElement>('button[aria-haspopup="dialog"]') ?? null;
+
   return (
-    <article className={`reminder-row reminder-row--${reminder.urgency.toLowerCase()}`} aria-label={reminder.name}>
+    <article ref={rowRef} className={`reminder-row reminder-row--${reminder.urgency.toLowerCase()}`} aria-label={reminder.name}>
       <span className="reminder-row__rail" aria-hidden="true" />
       <div className="reminder-row__name">
         <strong>{reminder.name}</strong>
@@ -51,9 +55,9 @@ export function ReminderRow({ onComplete, onEdit, onRenew, reminder }: ReminderR
       </div>
       <OverflowMenu label={`Actions for ${reminder.name}`}>
         <div className="reminder-row__menu">
-          <Button variant="ghost" onClick={() => onEdit(reminder)}>Edit</Button>
+          <Button variant="ghost" onClick={() => onEdit(reminder, returnFocus())}>Edit</Button>
           <Button variant="ghost" onClick={() => onComplete(reminder)}>Mark done</Button>
-          <Button variant="ghost" onClick={() => onRenew(reminder)}>Renew</Button>
+          <Button variant="ghost" onClick={() => onRenew(reminder, returnFocus())}>Renew</Button>
         </div>
       </OverflowMenu>
     </article>

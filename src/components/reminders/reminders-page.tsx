@@ -1,14 +1,14 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { reminderRequest } from '@/app/(protected)/reminders/actions';
 import { Button } from '@/components/ui/button';
 import { InlineNotice } from '@/components/ui/inline-notice';
 import { PageHeader } from '@/components/layout/page-header';
-import type { ReminderListPresentation, ReminderPresentation } from '@/server/reminders/presenters';
+import type { ReminderListPresentation } from '@/server/reminders/presenters';
 import { ReminderDrawer, type DrawerMode } from './reminder-drawer';
 import { ReminderGroup } from './reminder-group';
 
@@ -28,15 +28,26 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC' }:
   const [items, setItems] = useState(reminders);
   const [drawer, setDrawer] = useState<{ mode: DrawerMode; reminder: ReminderListPresentation | null } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const addTriggerRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
-  const openAdd = () => setDrawer({ mode: 'add', reminder: null });
-  const closeDrawer = () => setDrawer(null);
+  const openDrawer = (mode: DrawerMode, reminder: ReminderListPresentation | null, returnFocus: HTMLElement | null) => {
+    returnFocusRef.current = returnFocus;
+    setDrawer({ mode, reminder });
+  };
+  const openAdd = () => openDrawer('add', null, addTriggerRef.current);
+  const closeDrawer = () => {
+    setDrawer(null);
+    const target = returnFocusRef.current?.isConnected ? returnFocusRef.current : addTriggerRef.current;
+    target?.focus();
+  };
 
-  const saved = (mode: DrawerMode, reminder: ReminderPresentation) => {
+  const saved = (mode: DrawerMode, reminder: ReminderListPresentation) => {
     if (mode === 'edit') {
-      setItems((current) => current.map((item) => item.id === reminder.id ? { ...item, ...reminder } : item));
+      setItems((current) => current.map((item) => item.id === reminder.id ? reminder : item));
     } else if (mode === 'renew' && drawer?.reminder) {
-      setItems((current) => current.filter((item) => item.id !== drawer.reminder?.id));
+      setItems((current) => [...current.filter((item) => item.id !== drawer.reminder?.id), reminder]);
+      returnFocusRef.current = addTriggerRef.current;
     }
     closeDrawer();
     router.refresh();
@@ -55,7 +66,7 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC' }:
   };
 
   const addButton = (
-    <Button onClick={openAdd}>
+    <Button ref={addTriggerRef} onClick={openAdd}>
       <Plus aria-hidden="true" size={19} strokeWidth={1.75} />
       Add reminder
     </Button>
@@ -88,8 +99,8 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC' }:
                 label={label}
                 reminders={grouped}
                 onComplete={complete}
-                onEdit={(reminder) => setDrawer({ mode: 'edit', reminder })}
-                onRenew={(reminder) => setDrawer({ mode: 'renew', reminder })}
+                onEdit={(reminder, returnFocus) => openDrawer('edit', reminder, returnFocus)}
+                onRenew={(reminder, returnFocus) => openDrawer('renew', reminder, returnFocus)}
               />
             ) : null;
           })}
@@ -104,6 +115,7 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC' }:
           reminder={drawer.reminder}
           defaultAlertTime={defaultAlertTime}
           timezone={timezone}
+          returnFocusRef={returnFocusRef}
           onClose={closeDrawer}
           onSaved={saved}
         />
