@@ -4,7 +4,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 
 ## Requirements
 
-- Node.js 20.9.0 or newer
+- Node.js `^20.19`, `^22.12`, or `>=24.0.0` (the Prisma 7 requirement; Next.js alone supports `>=20.9.0`)
 - npm
 - Docker with Docker Compose, or another PostgreSQL instance
 - A Resend API key and verified sender identity for real email delivery
