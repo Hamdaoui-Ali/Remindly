@@ -6,7 +6,7 @@ import {
 } from '@/server/notifications/ledger';
 import { ReminderRepository } from '@/server/reminders/repository';
 import { calculateAlertAt } from '@/server/urgency/scheduling';
-import { SettingsRepository } from './repository';
+import { SettingsRepository, SETTINGS_SINGLETON_ID } from './repository';
 import {
   settingsInputSchema,
   updateSettingsSchema,
@@ -34,12 +34,34 @@ function dateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+async function lockSettingsSingleton(tx: Prisma.TransactionClient): Promise<void> {
+  await tx.$queryRaw`
+    SELECT id
+    FROM settings
+    WHERE id = ${SETTINGS_SINGLETON_ID}
+    FOR UPDATE
+  `;
+}
+
 async function activeRemindersWithPendingSchedules(tx: Prisma.TransactionClient) {
+  const locked = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT reminder.id
+    FROM reminders AS reminder
+    WHERE reminder.status = CAST('ACTIVE' AS "ReminderStatus")
+      AND EXISTS (
+        SELECT 1
+        FROM notifications AS notification
+        WHERE notification.reminder_id = reminder.id
+          AND notification.channel = CAST('EMAIL' AS "NotificationChannel")
+          AND notification.status = CAST('PENDING' AS "NotificationStatus")
+      )
+    ORDER BY reminder.id
+    FOR UPDATE OF reminder
+  `;
+
+  if (locked.length === 0) return [];
   return tx.reminder.findMany({
-    where: {
-      status: 'ACTIVE',
-      notifications: { some: { channel: 'EMAIL', status: 'PENDING' } },
-    },
+    where: { id: { in: locked.map(({ id }) => id) } },
     orderBy: { id: 'asc' },
   });
 }
@@ -58,6 +80,7 @@ export class SettingsService {
 
     return withTransaction(async (tx) => {
       const repository = new SettingsRepository(tx);
+      await lockSettingsSingleton(tx);
       const current = await repository.getSingleton();
       if (!current) throw new SettingsNotConfiguredError();
 
