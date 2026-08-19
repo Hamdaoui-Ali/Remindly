@@ -30,16 +30,32 @@ async function seedReminder(input: {
 }
 
 async function seedSentNotification(reminderId: string, sentAt: string) {
-  return prisma.notification.create({
-    data: {
-      reminderId,
-      scheduledFor: new Date(sentAt),
-      status: 'SENT',
-      sentAt: new Date(sentAt),
-      attemptCount: 1,
-      idempotencyKey: crypto.randomUUID(),
-    },
-  });
+  const id = crypto.randomUUID();
+  await prisma.$executeRaw`
+    INSERT INTO notifications (
+      id, reminder_id, scheduled_for, channel, status, attempt_count,
+      idempotency_key, sent_at, created_at, updated_at
+    ) VALUES (
+      ${id}::uuid, ${reminderId}::uuid, ${sentAt}::timestamptz, 'EMAIL', 'SENT', 1,
+      ${id}, ${sentAt}::timestamptz, NOW(), NOW()
+    )
+  `;
+  return id;
+}
+
+async function seedScheduledNotification(reminderId: string, scheduledFor: string) {
+  const id = crypto.randomUUID();
+  await prisma.$executeRaw`UPDATE reminders SET alert_at = ${scheduledFor}::timestamptz WHERE id = ${reminderId}::uuid`;
+  await prisma.$executeRaw`
+    INSERT INTO notifications (
+      id, reminder_id, scheduled_for, channel, status, attempt_count,
+      idempotency_key, created_at, updated_at
+    ) VALUES (
+      ${id}::uuid, ${reminderId}::uuid, ${scheduledFor}::timestamptz, 'EMAIL', 'PENDING', 0,
+      ${id}, NOW(), NOW()
+    )
+  `;
+  return id;
 }
 
 beforeEach(async () => {
@@ -90,9 +106,42 @@ describe('getDashboardData', () => {
     expect(data.summary.sentThisMonth).toBe(1);
   });
 
+  it('keeps month boundaries correct in a non-UTC database session', async () => {
+    const reminder = await seedReminder({ name: 'Session boundary', endDate: '2026-09-03' });
+    await seedSentNotification(reminder.id, '2026-07-31T22:30:00.000Z');
+    await seedSentNotification(reminder.id, '2026-07-31T23:30:00.000Z');
+    const completed = await seedReminder({
+      name: 'Completed at local month edge',
+      endDate: '2026-07-12',
+      status: 'DONE',
+      completedAt: '2026-07-31T23:30:00.000Z',
+    });
+    const renewed = await seedReminder({
+      name: 'Renewed at local month edge',
+      endDate: '2026-09-15',
+      status: 'ARCHIVED',
+      parentReminderId: reminder.id,
+      createdAt: '2026-07-31T23:30:00.000Z',
+    });
+    await prisma.$executeRaw`UPDATE reminders SET completed_at = ${'2026-07-31T23:30:00.000Z'}::timestamptz WHERE id = ${completed.id}::uuid`;
+    await prisma.$executeRaw`UPDATE reminders SET created_at = ${'2026-07-31T23:30:00.000Z'}::timestamptz WHERE id = ${renewed.id}::uuid`;
+
+    const data = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET LOCAL TIME ZONE 'Pacific/Honolulu'`;
+      return getDashboardData(NOW, tx);
+    });
+
+    expect(data.summary.sentThisMonth).toBe(1);
+    expect(data.completedVsRenewed.at(-1)).toMatchObject({
+      monthKey: '2026-08',
+      completed: 1,
+      renewed: 1,
+    });
+  });
+
   it('returns compact attention, six-month outcome, and thirty-day timeline data', async () => {
     const overdue = await seedReminder({ name: 'Hosting plan', endDate: '2026-08-17' });
-    await seedReminder({ name: 'Passport renewal', endDate: '2026-08-21' });
+    const urgent = await seedReminder({ name: 'Passport renewal', endDate: '2026-08-21' });
     await seedReminder({ name: 'Car insurance', endDate: '2026-08-25' });
     await seedReminder({ name: 'Outside the rail', endDate: '2026-09-20' });
     const completed = await seedReminder({
@@ -102,6 +151,7 @@ describe('getDashboardData', () => {
       completedAt: '2026-07-31T23:30:00.000Z',
     });
     expect(completed).toMatchObject({ status: 'DONE', completedAt: new Date('2026-07-31T23:30:00.000Z') });
+    await prisma.$executeRaw`UPDATE reminders SET completed_at = ${'2026-07-31T23:30:00.000Z'}::timestamptz WHERE id = ${completed.id}::uuid`;
     await seedReminder({
       name: 'Renewed August',
       endDate: '2026-09-15',
@@ -109,12 +159,18 @@ describe('getDashboardData', () => {
       parentReminderId: overdue.id,
       createdAt: '2026-08-02T10:00:00.000Z',
     });
+    await seedScheduledNotification(overdue.id, '2026-08-17T08:00:00.000Z');
+    await seedScheduledNotification(urgent.id, '2026-08-16T08:00:00.000Z');
 
     const data = await getDashboardData(NOW);
 
     expect(data.attention.map(({ name, urgency }) => [name, urgency])).toEqual([
       ['Hosting plan', 'OVERDUE'],
       ['Passport renewal', 'URGENT'],
+    ]);
+    expect(data.attention.map(({ scheduledEmail }) => scheduledEmail?.scheduledFor)).toEqual([
+      '2026-08-17T08:00:00.000Z',
+      '2026-08-16T08:00:00.000Z',
     ]);
     expect(data.nextThirtyDays.map(({ name }) => name)).toEqual([
       'Hosting plan',

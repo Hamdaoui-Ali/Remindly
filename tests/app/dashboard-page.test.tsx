@@ -16,6 +16,7 @@ const data: DashboardData = {
       urgency: 'OVERDUE',
       remainingCalendarDays: -2,
       relativeTime: '2 days overdue',
+      scheduledEmail: { scheduledFor: '2026-08-17T08:00:00.000Z', label: 'Aug 17, 2026, 9:00 AM' },
     },
     {
       id: 'urgent',
@@ -24,6 +25,7 @@ const data: DashboardData = {
       urgency: 'URGENT',
       remainingCalendarDays: 2,
       relativeTime: '2 days left',
+      scheduledEmail: { scheduledFor: '2026-08-16T08:00:00.000Z', label: 'Aug 16, 2026, 9:00 AM' },
     },
   ],
   urgencyCounts: { OVERDUE: 1, URGENT: 1, SOON: 1, SAFE: 1 },
@@ -43,6 +45,7 @@ const data: DashboardData = {
       urgency: 'OVERDUE',
       remainingCalendarDays: -2,
       relativeTime: '2 days overdue',
+      scheduledEmail: { scheduledFor: '2026-08-17T08:00:00.000Z', label: 'Aug 17, 2026, 9:00 AM' },
     },
     {
       id: 'soon',
@@ -51,6 +54,7 @@ const data: DashboardData = {
       urgency: 'SOON',
       remainingCalendarDays: 6,
       relativeTime: '6 days left',
+      scheduledEmail: { scheduledFor: '2026-08-18T08:00:00.000Z', label: 'Aug 18, 2026, 9:00 AM' },
     },
   ],
 };
@@ -65,6 +69,8 @@ describe('DashboardPage', () => {
     const attention = screen.getByRole('region', { name: 'Needs attention now' });
     expect(within(attention).getByText('Hosting plan')).toBeVisible();
     expect(within(attention).getByText('2 days overdue')).toBeVisible();
+    expect(within(attention).getByText('Aug 17, 2026, 9:00 AM').parentElement)
+      .toHaveTextContent('Scheduled: Aug 17, 2026, 9:00 AM');
   });
 
   it('gives every chart a visible legend, screen-reader summary, and data table', () => {
@@ -77,5 +83,24 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Renewed', { selector: '.chart-legend__label' })).toBeVisible();
     expect(screen.getByRole('table', { name: 'Completed and renewed reminder data' })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Next 30 days reminder data' })).toBeInTheDocument();
+  });
+
+  it('renders every timeline label at its calendar-day position', () => {
+    const nextThirtyDays = Array.from({ length: 7 }, (_, day) => ({
+      id: `timeline-${day}`,
+      name: `Timeline reminder ${day + 1}`,
+      endDate: `2026-08-${String(19 + day).padStart(2, '0')}`,
+      urgency: day <= 3 ? 'URGENT' as const : 'SOON' as const,
+      remainingCalendarDays: day,
+      relativeTime: day === 0 ? 'Due today' : `${day} days left`,
+      scheduledEmail: null,
+    }));
+
+    const { container } = render(<DashboardPage data={{ ...data, nextThirtyDays }} />);
+    const labels = Array.from(container.querySelectorAll<HTMLElement>('[data-day-position]'));
+
+    expect(labels).toHaveLength(7);
+    expect(labels.map((label) => label.dataset.dayPosition)).toEqual(['0', '1', '2', '3', '4', '5', '6']);
+    expect(labels.at(-1)).toHaveTextContent('Timeline reminder 7');
   });
 });

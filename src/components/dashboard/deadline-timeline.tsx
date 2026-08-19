@@ -18,6 +18,18 @@ export function DeadlineTimeline({ reminders }: { reminders: DashboardReminderIt
     lane: (index % 3) + 1,
     fill: COLORS[reminder.urgency],
   }));
+  const laneEnds: number[] = [];
+  const positionedLabels = points.map((point) => {
+    const gridColumn = Math.min(point.day + 1, 28);
+    let gridRow = laneEnds.findIndex((end) => end < gridColumn);
+    if (gridRow === -1) {
+      gridRow = laneEnds.length;
+      laneEnds.push(gridColumn + 3);
+    } else {
+      laneEnds[gridRow] = gridColumn + 3;
+    }
+    return { ...point, gridColumn, gridRow: gridRow + 1 };
+  });
   const summary = reminders.length === 0
     ? 'No active reminders are overdue or due in the next 30 days.'
     : `${reminders.length} active reminders are overdue or due in the next 30 days. ${reminders.filter((item) => item.urgency === 'OVERDUE').length} are overdue.`;
@@ -44,10 +56,19 @@ export function DeadlineTimeline({ reminders }: { reminders: DashboardReminderIt
         </ResponsiveContainer>
       </div>
       <div className="timeline-items" aria-hidden="true">
-        {reminders.slice(0, 6).map((reminder) => (
-          <span key={reminder.id} style={{ borderColor: COLORS[reminder.urgency] }}>
+        {positionedLabels.map((reminder) => (
+          <span
+            key={reminder.id}
+            data-day-position={reminder.day}
+            style={{
+              borderColor: COLORS[reminder.urgency],
+              gridColumn: `${reminder.gridColumn} / span 4`,
+              gridRow: reminder.gridRow,
+            }}
+          >
             <strong>{formatShortDate(reminder.endDate)}</strong>
             <small>{reminder.name}</small>
+            <small className="timeline-items__relative">{reminder.relativeTime}</small>
           </span>
         ))}
       </div>

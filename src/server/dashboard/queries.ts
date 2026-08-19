@@ -1,5 +1,4 @@
-import { fromZonedTime } from 'date-fns-tz';
-
+import type { Prisma, PrismaClient } from '@/generated/prisma/client';
 import { prisma } from '@/server/db/client';
 import { SETTINGS_SINGLETON_ID } from '@/server/settings/repository';
 import { calendarDayDifference, getLocalDate } from '@/server/urgency/calendar';
@@ -26,6 +25,19 @@ interface OutcomeRow {
   renewed: bigint;
 }
 
+interface SentRow {
+  sent_count: bigint;
+}
+
+interface CompactReminderRow {
+  id: string;
+  name: string;
+  end_date: string;
+  scheduled_for: string | null;
+}
+
+export type DashboardDatabase = PrismaClient | Prisma.TransactionClient;
+
 function dateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
@@ -51,10 +63,6 @@ function monthLabel(monthKey: string): string {
     .format(new Date(`${monthKey}-01T00:00:00.000Z`));
 }
 
-function localMonthBoundary(monthKey: string, timezone: string): Date {
-  return fromZonedTime(`${monthKey}-01T00:00:00`, timezone);
-}
-
 function relativeTime(days: number): string {
   if (days < -1) return `${Math.abs(days)} days overdue`;
   if (days === -1) return '1 day overdue';
@@ -64,11 +72,11 @@ function relativeTime(days: number): string {
 }
 
 function presentDashboardReminder(
-  reminder: { id: string; name: string; endDate: Date },
+  reminder: CompactReminderRow,
   now: Date,
   timezone: string,
 ): DashboardReminderItem {
-  const endDate = dateOnly(reminder.endDate);
+  const endDate = reminder.end_date;
   const remainingCalendarDays = calendarDayDifference(endDate, now, timezone);
   return {
     id: reminder.id,
@@ -77,6 +85,16 @@ function presentDashboardReminder(
     urgency: calculateUrgency(endDate, now, timezone),
     remainingCalendarDays,
     relativeTime: relativeTime(remainingCalendarDays),
+    scheduledEmail: reminder.scheduled_for
+      ? {
+          scheduledFor: reminder.scheduled_for,
+          label: new Intl.DateTimeFormat('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: timezone,
+          }).format(new Date(reminder.scheduled_for)),
+        }
+      : null,
   };
 }
 
@@ -84,8 +102,8 @@ function number(value: bigint | undefined): number {
   return Number(value ?? 0n);
 }
 
-export async function getDashboardData(now: Date): Promise<DashboardData> {
-  const settings = await prisma.settings.findUnique({
+export async function getDashboardData(now: Date, db: DashboardDatabase = prisma): Promise<DashboardData> {
+  const settings = await db.settings.findUnique({
     where: { id: SETTINGS_SINGLETON_ID },
     select: { timezone: true },
   });
@@ -93,41 +111,61 @@ export async function getDashboardData(now: Date): Promise<DashboardData> {
 
   const timezone = settings.timezone;
   const localToday = getLocalDate(now, timezone);
-  const today = databaseDate(localToday);
-  const todayPlusThree = databaseDate(shiftCalendarDate(localToday, 3));
-  const todayPlusSeven = databaseDate(shiftCalendarDate(localToday, 7));
-  const todayPlusFourteen = databaseDate(shiftCalendarDate(localToday, 14));
-  const todayPlusThirty = databaseDate(shiftCalendarDate(localToday, 30));
+  const todayPlusThree = shiftCalendarDate(localToday, 3);
+  const todayPlusSeven = shiftCalendarDate(localToday, 7);
+  const todayPlusFourteen = shiftCalendarDate(localToday, 14);
+  const todayPlusThirty = shiftCalendarDate(localToday, 30);
   const currentMonth = localToday.slice(0, 7);
   const firstMonth = shiftMonth(currentMonth, -5);
   const nextMonth = shiftMonth(currentMonth, 1);
-  const monthStart = localMonthBoundary(currentMonth, timezone);
-  const nextMonthStart = localMonthBoundary(nextMonth, timezone);
-  const historyStart = localMonthBoundary(firstMonth, timezone);
+  const monthStart = `${currentMonth}-01T00:00:00`;
+  const nextMonthStart = `${nextMonth}-01T00:00:00`;
+  const historyStart = `${firstMonth}-01T00:00:00`;
 
-  const [countRows, sentThisMonth, compactReminders, outcomeRows] = await Promise.all([
-    prisma.$queryRaw<CountRow[]>`
+  const [countRows, sentRows, compactReminders, outcomeRows] = await Promise.all([
+    db.$queryRaw<CountRow[]>`
       SELECT
         COUNT(*) FILTER (WHERE status = 'ACTIVE')::bigint AS active_count,
-        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date < ${today})::bigint AS overdue_count,
-        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date >= ${today} AND end_date <= ${todayPlusSeven})::bigint AS due_seven_count,
-        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date >= ${today} AND end_date <= ${todayPlusThree})::bigint AS urgent_count,
-        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date > ${todayPlusThree} AND end_date <= ${todayPlusFourteen})::bigint AS soon_count,
-        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date > ${todayPlusFourteen})::bigint AS safe_count
+        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date < ${localToday}::date)::bigint AS overdue_count,
+        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date >= ${localToday}::date AND end_date <= ${todayPlusSeven}::date)::bigint AS due_seven_count,
+        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date >= ${localToday}::date AND end_date <= ${todayPlusThree}::date)::bigint AS urgent_count,
+        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date > ${todayPlusThree}::date AND end_date <= ${todayPlusFourteen}::date)::bigint AS soon_count,
+        COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date > ${todayPlusFourteen}::date)::bigint AS safe_count
       FROM reminders
     `,
-    prisma.notification.count({
-      where: {
-        status: 'SENT',
-        sentAt: { gte: monthStart, lt: nextMonthStart },
-      },
-    }),
-    prisma.reminder.findMany({
-      where: { status: 'ACTIVE', endDate: { lte: todayPlusThirty } },
-      select: { id: true, name: true, endDate: true },
-      orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
-    }),
-    prisma.$queryRaw<OutcomeRow[]>`
+    db.$queryRaw<SentRow[]>`
+      SELECT COUNT(*)::bigint AS sent_count
+      FROM notifications
+      WHERE status = 'SENT'
+        AND sent_at >= (${monthStart}::timestamp AT TIME ZONE ${timezone})
+        AND sent_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
+    `,
+    db.$queryRaw<CompactReminderRow[]>`
+      SELECT
+        reminder.id,
+        reminder.name,
+        reminder.end_date::text AS end_date,
+        CASE WHEN current_notification.scheduled_for IS NULL THEN NULL ELSE
+          TO_CHAR(
+            current_notification.scheduled_for AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
+        END AS scheduled_for
+      FROM reminders reminder
+      LEFT JOIN LATERAL (
+        SELECT notification.scheduled_for
+        FROM notifications notification
+        WHERE notification.reminder_id = reminder.id
+          AND notification.channel = 'EMAIL'
+          AND notification.scheduled_for = reminder.alert_at
+        ORDER BY notification.created_at DESC
+        LIMIT 1
+      ) current_notification ON TRUE
+      WHERE reminder.status = 'ACTIVE'
+        AND reminder.end_date <= ${todayPlusThirty}::date
+      ORDER BY reminder.end_date ASC, reminder.created_at ASC
+    `,
+    db.$queryRaw<OutcomeRow[]>`
       SELECT month_key, SUM(completed)::bigint AS completed, SUM(renewed)::bigint AS renewed
       FROM (
         SELECT
@@ -136,8 +174,8 @@ export async function getDashboardData(now: Date): Promise<DashboardData> {
           0::bigint AS renewed
         FROM reminders
         WHERE status = 'DONE'
-          AND completed_at >= ${historyStart}
-          AND completed_at < ${nextMonthStart}
+          AND completed_at >= (${historyStart}::timestamp AT TIME ZONE ${timezone})
+          AND completed_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
         GROUP BY month_key
         UNION ALL
         SELECT
@@ -146,8 +184,8 @@ export async function getDashboardData(now: Date): Promise<DashboardData> {
           COUNT(*)::bigint AS renewed
         FROM reminders
         WHERE parent_reminder_id IS NOT NULL
-          AND created_at >= ${historyStart}
-          AND created_at < ${nextMonthStart}
+          AND created_at >= (${historyStart}::timestamp AT TIME ZONE ${timezone})
+          AND created_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
         GROUP BY month_key
       ) outcomes
       GROUP BY month_key
@@ -156,6 +194,7 @@ export async function getDashboardData(now: Date): Promise<DashboardData> {
   ]);
 
   const counts = countRows[0];
+  const sentThisMonth = number(sentRows[0]?.sent_count);
   const urgencyCounts: UrgencyCounts = {
     OVERDUE: number(counts?.overdue_count),
     URGENT: number(counts?.urgent_count),

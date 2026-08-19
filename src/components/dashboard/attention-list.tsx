@@ -19,9 +19,14 @@ export function AttentionList({ reminders }: { reminders: DashboardReminderItem[
               <span className="attention-list__name">
                 <strong>{reminder.name}</strong>
                 <small>End date: <time dateTime={reminder.endDate}>{formatDate(reminder.endDate)}</time></small>
+                <small className="attention-list__scheduled">
+                  Scheduled: {reminder.scheduledEmail
+                    ? <time dateTime={reminder.scheduledEmail.scheduledFor}>{reminder.scheduledEmail.label}</time>
+                    : 'Not scheduled'}
+                </small>
               </span>
               <strong className="attention-list__relative">{reminder.relativeTime}</strong>
-              <Link href={`/reminders?focus=${reminder.id}`}>Review reminder</Link>
+              <Link href={`/reminders?focus=${reminder.id}`} aria-label={`Review ${reminder.name}`}>Review reminder</Link>
             </li>
           ))}
         </ul>

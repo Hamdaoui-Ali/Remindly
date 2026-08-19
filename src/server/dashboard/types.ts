@@ -14,6 +14,10 @@ export interface DashboardReminderItem {
   urgency: Urgency;
   remainingCalendarDays: number;
   relativeTime: string;
+  scheduledEmail: {
+    scheduledFor: string;
+    label: string;
+  } | null;
 }
 
 export type UrgencyCounts = Record<Urgency, number>;
