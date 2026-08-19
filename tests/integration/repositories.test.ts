@@ -82,10 +82,12 @@ describe('NotificationRepository', () => {
     const notifications = new NotificationRepository(prisma);
     const reminder = await reminders.create(makeReminderInput(name));
     const scheduledFor = new Date('2026-08-29T08:00:00.000Z');
+    const notificationId = crypto.randomUUID();
     const pending = await notifications.createPending({
+      id: notificationId,
       reminderId: reminder.id,
       scheduledFor,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: notificationId,
       channel: 'EMAIL',
       status: 'PENDING',
     });
@@ -110,6 +112,7 @@ describe('NotificationRepository', () => {
 
     await notifications.markSent(pending.id, {
       status: 'SENT',
+      expectedProcessingStartedAt: new Date('2026-08-29T08:01:00.000Z'),
       providerMessageId: 'provider-message-123',
       sentAt: new Date('2026-08-29T08:02:00.000Z'),
       nextAttemptAt: null,
@@ -129,10 +132,12 @@ describe('NotificationRepository', () => {
     const reminders = new ReminderRepository(prisma);
     const notifications = new NotificationRepository(prisma);
     const reminder = await reminders.create(makeReminderInput(name));
+    const notificationId = crypto.randomUUID();
     const pending = await notifications.createPending({
+      id: notificationId,
       reminderId: reminder.id,
       scheduledFor: new Date('2026-08-29T08:00:00.000Z'),
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: notificationId,
       channel: 'EMAIL',
       status: 'PENDING',
     });
@@ -175,6 +180,7 @@ describe('NotificationRepository', () => {
     const reminder = await reminders.create(makeReminderInput(name));
     const idempotencyKey = crypto.randomUUID();
     const pending = await notifications.createPending({
+      id: idempotencyKey,
       reminderId: reminder.id,
       scheduledFor: new Date('2026-08-29T08:00:00.000Z'),
       idempotencyKey,
@@ -191,6 +197,7 @@ describe('NotificationRepository', () => {
     });
     await notifications.markFailed(pending.id, {
       status: 'FAILED',
+      expectedProcessingStartedAt: new Date('2026-08-29T08:01:00.000Z'),
       lastError: 'The provider timed out',
       nextAttemptAt: new Date('2026-08-29T08:06:00.000Z'),
       processingStartedAt: null,

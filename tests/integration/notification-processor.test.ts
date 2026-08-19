@@ -26,13 +26,17 @@ class RecordingEmailProvider implements EmailProvider {
     const existing = this.accepted.get(input.idempotencyKey);
     if (existing) return { providerMessageId: existing };
     if (this.failAlways.has(input.idempotencyKey)) {
-      throw new Error('Provider rejected secret token re_sensitive_should_not_be_stored');
+      throw Object.assign(new Error('Provider rejected secret token re_sensitive_should_not_be_stored'), {
+        outcome: 'definite_failure',
+      });
     }
 
     const providerMessageId = `fake-${input.idempotencyKey}`;
     this.accepted.set(input.idempotencyKey, providerMessageId);
     if (this.ambiguousOnce.delete(input.idempotencyKey)) {
-      throw new Error('Connection dropped after provider acceptance');
+      throw Object.assign(new Error('Connection dropped after provider acceptance'), {
+        outcome: 'unknown_outcome',
+      });
     }
     return { providerMessageId };
   }
@@ -115,6 +119,38 @@ async function createDueNotification(input: {
   return { reminder, notification };
 }
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((next) => { resolve = next; });
+  return { promise, resolve };
+}
+
+async function updateReminderWhileLocked(id: string, alertAt: Date) {
+  const locked = deferred();
+  const release = deferred();
+  const finished = prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM reminders WHERE id = ${id}::uuid FOR UPDATE`;
+    await tx.reminder.update({ where: { id }, data: { alertAt } });
+    locked.resolve();
+    await release.promise;
+  });
+  await locked.promise;
+  return { release, finished };
+}
+
+async function waitForReconciliationLock() {
+  await expect.poll(async () => {
+    const rows = await prisma.$queryRaw<Array<{ waiting: bigint }>>`
+      SELECT count(*)::bigint AS waiting
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND wait_event_type = 'Lock'
+        AND query LIKE ${'%INSERT INTO notifications%'}
+    `;
+    return Number(rows[0]?.waiting ?? 0n);
+  }, { timeout: 5_000, interval: 20 }).toBeGreaterThan(0);
+}
+
 describe('processDueNotifications', () => {
   it('claims a due row once when two processors run concurrently', async () => {
     const { notification } = await createDueNotification();
@@ -163,9 +199,47 @@ describe('processDueNotifications', () => {
       .toMatchObject({ status: 'PROCESSING', attemptCount: 1 });
   });
 
+  it('terminalizes an expired fifth-attempt lease without making a sixth provider call', async () => {
+    const { notification } = await createDueNotification({
+      status: 'PROCESSING',
+      attemptCount: 5,
+      processingStartedAt: new Date('2026-08-19T11:44:59.999Z'),
+    });
+    const provider = new RecordingEmailProvider();
+
+    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+
+    expect(result).toEqual({ claimed: 0, sent: 0, failed: 1, recovered: 1 });
+    expect(provider.calls).toHaveLength(0);
+    expect(await prisma.notification.findUnique({ where: { id: notification.id } }))
+      .toMatchObject({
+        status: 'FAILED',
+        attemptCount: 5,
+        processingStartedAt: null,
+        nextAttemptAt: null,
+        lastError: 'Processing lease expired after final attempt',
+      });
+  });
+
   it('re-checks reminder state and cancels a claimed row before calling the provider', async () => {
     const { reminder, notification } = await createDueNotification();
     await prisma.reminder.update({ where: { id: reminder.id }, data: { status: 'DONE', completedAt: NOW } });
+    const provider = new RecordingEmailProvider();
+
+    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+
+    expect(result).toEqual({ claimed: 1, sent: 0, failed: 0, recovered: 0 });
+    expect(provider.calls).toHaveLength(0);
+    expect(await prisma.notification.findUnique({ where: { id: notification.id } }))
+      .toMatchObject({ status: 'CANCELLED', processingStartedAt: null });
+  });
+
+  it('cancels a claimed notification whose schedule is no longer current', async () => {
+    const { reminder, notification } = await createDueNotification();
+    await prisma.reminder.update({
+      where: { id: reminder.id },
+      data: { alertAt: new Date('2026-08-20T11:00:00.000Z') },
+    });
     const provider = new RecordingEmailProvider();
 
     const result = await processDueNotifications({ now: NOW, limit: 20, provider });
@@ -189,7 +263,7 @@ describe('processDueNotifications', () => {
       .toMatchObject({
         status: 'FAILED',
         attemptCount: 1,
-        lastError: 'Email provider request failed',
+        lastError: 'Email provider definite failure',
         nextAttemptAt: new Date('2026-08-19T12:05:00.000Z'),
       });
     expect(await prisma.notification.findUnique({ where: { id: passing.notification.id } }))
@@ -202,6 +276,11 @@ describe('processDueNotifications', () => {
     provider.ambiguousOnce.add(notification.id);
 
     await processDueNotifications({ now: NOW, limit: 20, provider });
+    expect(await prisma.notification.findUnique({ where: { id: notification.id } }))
+      .toMatchObject({
+        status: 'FAILED',
+        lastError: 'Email provider outcome unknown; retry may duplicate without provider idempotency',
+      });
     const retried = await processDueNotifications({
       now: new Date('2026-08-19T12:05:00.000Z'),
       limit: 20,
@@ -271,5 +350,24 @@ describe('reconcileMissingPendingNotifications', () => {
       channel: 'EMAIL',
     }]);
     expect(rows[0]?.idempotencyKey).toBe(rows[0]?.id);
+  });
+
+  it('skips a reminder locked by a schedule edit and later reconciles only its committed schedule', async () => {
+    const reminder = await createReminder();
+    const nextAlertAt = new Date('2026-08-20T11:00:00.000Z');
+    const lock = await updateReminderWhileLocked(reminder.id, nextAlertAt);
+    const reconciliation = reconcileMissingPendingNotifications(NOW);
+    const outcome = await Promise.race([
+      reconciliation.then((count) => ({ kind: 'completed' as const, count })),
+      waitForReconciliationLock().then(() => ({ kind: 'blocked' as const, count: -1 })),
+    ]);
+    lock.release.resolve();
+    await lock.finished;
+    if (outcome.kind === 'blocked') await reconciliation;
+
+    expect(outcome).toEqual({ kind: 'completed', count: 0 });
+    expect(await reconcileMissingPendingNotifications(NOW)).toBe(1);
+    expect(await prisma.notification.findMany({ where: { reminderId: reminder.id } }))
+      .toMatchObject([{ scheduledFor: nextAlertAt, status: 'PENDING' }]);
   });
 });

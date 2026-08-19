@@ -57,4 +57,54 @@ describe('ResendEmailProvider', () => {
       options: { idempotencyKey: email.idempotencyKey },
     }]);
   });
+
+  it('classifies a deterministic provider rejection as a definite failure', async () => {
+    const client: ResendClient = {
+      emails: {
+        async send() {
+          return {
+            data: null,
+            error: { name: 'validation_error', message: 'Invalid recipient', statusCode: 422 },
+            headers: null,
+          };
+        },
+      },
+    };
+    const provider = new ResendEmailProvider({
+      apiKey: 'not-used-by-the-fake',
+      from: 'Remindly <notifications@example.com>',
+      client,
+    });
+
+    await expect(provider.send({
+      to: 'owner@example.com',
+      subject: 'Reminder due',
+      html: '<p>Renew passport</p>',
+      text: 'Renew passport',
+      idempotencyKey: '1e4785b7-7a88-46f0-8b61-bb76dd356bd7',
+    })).rejects.toMatchObject({ outcome: 'definite_failure' });
+  });
+
+  it('classifies a thrown network error as an unknown outcome', async () => {
+    const client: ResendClient = {
+      emails: {
+        async send() {
+          throw new Error('socket closed after request write');
+        },
+      },
+    };
+    const provider = new ResendEmailProvider({
+      apiKey: 'not-used-by-the-fake',
+      from: 'Remindly <notifications@example.com>',
+      client,
+    });
+
+    await expect(provider.send({
+      to: 'owner@example.com',
+      subject: 'Reminder due',
+      html: '<p>Renew passport</p>',
+      text: 'Renew passport',
+      idempotencyKey: '1e4785b7-7a88-46f0-8b61-bb76dd356bd7',
+    })).rejects.toMatchObject({ outcome: 'unknown_outcome' });
+  });
 });

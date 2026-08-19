@@ -4,7 +4,12 @@ import {
   type CreateEmailRequestOptions,
   type CreateEmailResponse,
 } from 'resend';
-import type { EmailProvider, SendEmailInput, SendEmailResult } from './provider';
+import {
+  EmailDeliveryError,
+  type EmailProvider,
+  type SendEmailInput,
+  type SendEmailResult,
+} from './provider';
 
 export interface ResendClient {
   emails: {
@@ -29,17 +34,21 @@ export class ResendEmailProvider implements EmailProvider {
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
-    const response = await this.client.emails.send({
-      from: this.options.from,
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      text: input.text,
-    }, { idempotencyKey: input.idempotencyKey });
-
-    if (response.error || !response.data) {
-      throw new Error('Resend email request failed');
+    let response: CreateEmailResponse;
+    try {
+      response = await this.client.emails.send({
+        from: this.options.from,
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        text: input.text,
+      }, { idempotencyKey: input.idempotencyKey });
+    } catch {
+      throw new EmailDeliveryError('unknown_outcome');
     }
+
+    if (response.error) throw new EmailDeliveryError('definite_failure');
+    if (!response.data) throw new EmailDeliveryError('unknown_outcome');
 
     return { providerMessageId: response.data.id };
   }

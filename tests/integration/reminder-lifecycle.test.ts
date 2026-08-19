@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/server/db/client';
 import { ReminderService } from '@/server/reminders/service';
+import { NotificationRepository } from '@/server/notifications/repository';
 import { SETTINGS_SINGLETON_ID } from '@/server/settings/repository';
 
 const NOW = new Date('2026-08-19T12:00:00.000Z');
@@ -274,7 +275,17 @@ describe('ReminderService lifecycle', () => {
     const existing = await createFixture();
     const failedName = `Failed creation ${crypto.randomUUID()}`;
     fixtureNames.push(failedName);
-    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(existing.notification.idempotencyKey);
+    const createPending = NotificationRepository.prototype.createPending;
+    vi.spyOn(NotificationRepository.prototype, 'createPending').mockImplementationOnce(function (
+      this: NotificationRepository,
+      input,
+    ) {
+      return createPending.call(this, {
+        ...input,
+        id: existing.notification.id,
+        idempotencyKey: existing.notification.idempotencyKey,
+      });
+    });
 
     await expect(service.createReminder(input(failedName), NOW)).rejects.toThrow();
 

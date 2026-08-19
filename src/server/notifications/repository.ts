@@ -9,7 +9,7 @@ import type {
 export type NotificationDatabase = PrismaClient | Prisma.TransactionClient;
 
 export interface CreatePendingNotification {
-  id?: string;
+  id: string;
   reminderId: string;
   scheduledFor: Date;
   idempotencyKey: string;
@@ -33,6 +33,10 @@ export interface NotificationTransition {
   lastError?: string | null;
 }
 
+export interface ClaimedNotificationTransition extends NotificationTransition {
+  expectedProcessingStartedAt: Date;
+}
+
 export interface ClaimPendingNotification extends NotificationTransition {
   id: string;
   expectedStatuses: NotificationStatus[];
@@ -49,6 +53,9 @@ export interface ReclaimExpiredProcessing extends NotificationStatusTransition {
   leaseExpiredBefore: Date;
   processingStartedAt: Date | null;
   incrementAttemptCount: boolean;
+  minimumAttemptCount?: number;
+  nextAttemptAt?: Date | null;
+  lastError?: string | null;
 }
 
 export interface AtomicDueClaim {
@@ -85,9 +92,7 @@ export class NotificationRepository {
   constructor(private readonly db: NotificationDatabase) {}
 
   createPending(input: CreatePendingNotification): Promise<Notification> {
-    return this.db.notification.create({
-      data: { ...input, id: input.id ?? input.idempotencyKey },
-    });
+    return this.db.notification.create({ data: input });
   }
 
   findPendingForReminderIds(reminderIds: string[]): Promise<Notification[]> {
@@ -183,22 +188,28 @@ export class NotificationRepository {
   async transitionWhenStatus(
     id: string,
     expectedStatus: NotificationStatus,
-    transition: NotificationTransition,
+    transition: ClaimedNotificationTransition,
   ): Promise<boolean> {
+    const { expectedProcessingStartedAt, ...data } = transition;
     const result = await this.db.notification.updateMany({
-      where: { id, status: expectedStatus },
-      data: transition,
+      where: { id, status: expectedStatus, processingStartedAt: expectedProcessingStartedAt },
+      data,
     });
     return result.count === 1;
   }
 
   async reconcileMissingPending(input: MissingNotificationReconciliation): Promise<number> {
     const created = await this.db.$queryRaw<Array<{ id: string }>>`
-      WITH missing AS MATERIALIZED (
-        SELECT gen_random_uuid() AS id, reminder.id AS reminder_id, reminder.alert_at
+      WITH locked_reminders AS MATERIALIZED (
+        SELECT reminder.id, reminder.alert_at
         FROM reminders AS reminder
         WHERE reminder.status = ${input.reminderStatus}::"ReminderStatus"
-          AND NOT EXISTS (
+        FOR UPDATE OF reminder SKIP LOCKED
+      ),
+      missing AS MATERIALIZED (
+        SELECT gen_random_uuid() AS id, reminder.id AS reminder_id, reminder.alert_at
+        FROM locked_reminders AS reminder
+        WHERE NOT EXISTS (
             SELECT 1
             FROM notifications AS notification
             WHERE notification.reminder_id = reminder.id
@@ -258,24 +269,20 @@ export class NotificationRepository {
       : null;
   }
 
-  markSent(id: string, transition: NotificationTransition): Promise<Notification> {
-    return this.db.notification.update({
-      where: { id },
-      data: transition,
-    });
+  markSent(id: string, transition: ClaimedNotificationTransition): Promise<boolean> {
+    return this.transitionWhenStatus(id, 'PROCESSING', transition);
   }
 
-  markFailed(id: string, transition: NotificationTransition): Promise<Notification> {
-    return this.db.notification.update({
-      where: { id },
-      data: transition,
-    });
+  markFailed(id: string, transition: ClaimedNotificationTransition): Promise<boolean> {
+    return this.transitionWhenStatus(id, 'PROCESSING', transition);
   }
 
   async reclaimExpiredProcessing(input: ReclaimExpiredProcessing): Promise<number> {
     const data: Prisma.NotificationUpdateManyMutationInput = {
       status: input.status,
       processingStartedAt: input.processingStartedAt,
+      nextAttemptAt: input.nextAttemptAt,
+      lastError: input.lastError,
     };
     if (input.incrementAttemptCount) {
       data.attemptCount = { increment: 1 };
@@ -285,6 +292,9 @@ export class NotificationRepository {
       where: {
         status: input.expectedStatus,
         processingStartedAt: { lt: input.leaseExpiredBefore },
+        ...(input.minimumAttemptCount === undefined
+          ? {}
+          : { attemptCount: { gte: input.minimumAttemptCount } }),
       },
       data,
     });
