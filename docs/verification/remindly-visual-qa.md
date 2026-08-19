@@ -61,16 +61,14 @@ Accepted references:
 - `npm run build` — PASS (production build; Next.js middleware deprecation warning only)
 - Playwright production visual QA script — PASS at 1440 × 1024 and 390 × 844
 - `git diff --check` — PASS
-- `npm test` — parallel run exposed shared singleton database interference: 12 integration failures across concurrent suites
-- `npm test -- --maxWorkers=1` — PASS, 28 files and 133 tests
+- Historical pre-fix evidence: `npm test` then invoked parallel Vitest and exposed shared singleton database interference (12 integration failures across concurrent suites).
+- Current `npm test` (`vitest run --maxWorkers=1`) — PASS, 28 files and 133 tests.
 - `npm run lint` — PASS
 - `npm run test:e2e` — PASS, 9 tests after removing the ignored screenshot-only `.env.local`
-
-The default `npm test` script now includes `--maxWorkers=1`, preserving the deterministic execution mode required by integration suites that share the singleton Settings row.
 
 ## Remaining risks
 
 - The in-app Browser was unavailable, so the rendered gate used the explicitly permitted Playwright Chromium fallback. Firefox, WebKit, and extension-backed browser sessions were not tested.
 - Comparison was a manual visual review against the accepted PNGs, not a pixel-diff baseline.
-- Integration suites share the singleton Settings row and must run serially against one database; an unrestricted parallel `npm test` can create cross-suite interference.
+- Integration suites share the singleton Settings row, so the supported `npm test` command serializes Vitest. A manually invoked parallel Vitest command is not a supported release gate.
 - Next.js reports that the `middleware.ts` convention is deprecated in favor of `proxy`; it does not fail lint, build, or E2E.
