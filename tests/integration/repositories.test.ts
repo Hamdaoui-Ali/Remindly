@@ -1,10 +1,26 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db/client';
 import { NotificationRepository } from '@/server/notifications/repository';
 import { ReminderRepository } from '@/server/reminders/repository';
 import { SETTINGS_SINGLETON_ID, SettingsRepository } from '@/server/settings/repository';
 
 const testNames: string[] = [];
+let originalSettings: {
+  notificationEmail: string;
+  timezone: string;
+  defaultAlertTime: string;
+} | null = null;
+
+beforeEach(async () => {
+  originalSettings = await prisma.settings.findUnique({
+    where: { id: SETTINGS_SINGLETON_ID },
+    select: {
+      notificationEmail: true,
+      timezone: true,
+      defaultAlertTime: true,
+    },
+  });
+});
 
 afterEach(async () => {
   if (testNames.length > 0) {
@@ -12,7 +28,15 @@ afterEach(async () => {
     testNames.length = 0;
   }
 
-  await prisma.settings.deleteMany({ where: { id: SETTINGS_SINGLETON_ID } });
+  if (originalSettings) {
+    await prisma.settings.update({
+      where: { id: SETTINGS_SINGLETON_ID },
+      data: originalSettings,
+    });
+  } else {
+    await prisma.settings.deleteMany({ where: { id: SETTINGS_SINGLETON_ID } });
+  }
+  originalSettings = null;
 });
 
 function makeReminderInput(name: string) {
@@ -34,6 +58,9 @@ describe('ReminderRepository', () => {
     const created = await reminders.create(makeReminderInput(name));
     await reminders.update(created.id, { name: `${name} updated`, alertLeadDays: 5 });
     testNames.push(`${name} updated`);
+
+    expect((await reminders.listActive()).filter((reminder) => reminder.id === created.id))
+      .toMatchObject([{ id: created.id, status: 'ACTIVE' }]);
     await reminders.setStatus(created.id, 'DONE', new Date('2026-08-30T08:00:00.000Z'));
 
     expect(await reminders.findById(created.id)).toMatchObject({
@@ -43,7 +70,7 @@ describe('ReminderRepository', () => {
       status: 'DONE',
       completedAt: new Date('2026-08-30T08:00:00.000Z'),
     });
-    expect(await reminders.listActive()).toEqual([]);
+    expect((await reminders.listActive()).filter((reminder) => reminder.id === created.id)).toEqual([]);
   });
 });
 
@@ -59,18 +86,35 @@ describe('NotificationRepository', () => {
       reminderId: reminder.id,
       scheduledFor,
       idempotencyKey: crypto.randomUUID(),
+      channel: 'EMAIL',
+      status: 'PENDING',
     });
 
-    expect(await notifications.findDueCandidates(new Date('2026-08-29T08:01:00.000Z'), 10))
+    expect(await notifications.findDueCandidates({
+      now: new Date('2026-08-29T08:01:00.000Z'),
+      scheduledForStatuses: ['PENDING'],
+      nextAttemptStatuses: ['FAILED'],
+      limit: 10,
+    }))
       .toEqual(expect.arrayContaining([
         expect.objectContaining({ id: pending.id, status: 'PENDING' }),
       ]));
-    expect(await notifications.claimPending(pending.id, new Date('2026-08-29T08:01:00.000Z')))
+    expect(await notifications.claimPending({
+      id: pending.id,
+      expectedStatuses: ['PENDING', 'FAILED'],
+      status: 'PROCESSING',
+      processingStartedAt: new Date('2026-08-29T08:01:00.000Z'),
+      incrementAttemptCount: true,
+    }))
       .toMatchObject({ id: pending.id, status: 'PROCESSING', attemptCount: 1 });
 
     await notifications.markSent(pending.id, {
+      status: 'SENT',
       providerMessageId: 'provider-message-123',
       sentAt: new Date('2026-08-29T08:02:00.000Z'),
+      nextAttemptAt: null,
+      processingStartedAt: null,
+      lastError: null,
     });
     expect(await prisma.notification.findUnique({ where: { id: pending.id } })).toMatchObject({
       status: 'SENT',
@@ -89,10 +133,24 @@ describe('NotificationRepository', () => {
       reminderId: reminder.id,
       scheduledFor: new Date('2026-08-29T08:00:00.000Z'),
       idempotencyKey: crypto.randomUUID(),
+      channel: 'EMAIL',
+      status: 'PENDING',
     });
 
-    await notifications.claimPending(pending.id, new Date('2026-08-29T08:01:00.000Z'));
-    expect(await notifications.reclaimExpiredProcessing(new Date('2026-08-29T08:17:00.000Z')))
+    await notifications.claimPending({
+      id: pending.id,
+      expectedStatuses: ['PENDING'],
+      status: 'PROCESSING',
+      processingStartedAt: new Date('2026-08-29T08:01:00.000Z'),
+      incrementAttemptCount: true,
+    });
+    expect(await notifications.reclaimExpiredProcessing({
+      leaseExpiredBefore: new Date('2026-08-29T08:02:00.000Z'),
+      expectedStatus: 'PROCESSING',
+      status: 'PENDING',
+      processingStartedAt: null,
+      incrementAttemptCount: true,
+    }))
       .toBe(1);
     expect(await prisma.notification.findUnique({ where: { id: pending.id } })).toMatchObject({
       status: 'PENDING',
@@ -100,7 +158,10 @@ describe('NotificationRepository', () => {
       processingStartedAt: null,
     });
 
-    expect(await notifications.cancelPendingForReminder(reminder.id)).toBe(1);
+    expect(await notifications.cancelPendingForReminder(reminder.id, {
+      expectedStatus: 'PENDING',
+      status: 'CANCELLED',
+    })).toBe(1);
     expect(await prisma.notification.findUnique({ where: { id: pending.id } })).toMatchObject({
       status: 'CANCELLED',
     });
@@ -117,12 +178,22 @@ describe('NotificationRepository', () => {
       reminderId: reminder.id,
       scheduledFor: new Date('2026-08-29T08:00:00.000Z'),
       idempotencyKey,
+      channel: 'EMAIL',
+      status: 'PENDING',
     });
 
-    await notifications.claimPending(pending.id, new Date('2026-08-29T08:01:00.000Z'));
+    await notifications.claimPending({
+      id: pending.id,
+      expectedStatuses: ['PENDING'],
+      status: 'PROCESSING',
+      processingStartedAt: new Date('2026-08-29T08:01:00.000Z'),
+      incrementAttemptCount: true,
+    });
     await notifications.markFailed(pending.id, {
+      status: 'FAILED',
       lastError: 'The provider timed out',
       nextAttemptAt: new Date('2026-08-29T08:06:00.000Z'),
+      processingStartedAt: null,
     });
 
     expect(await prisma.notification.findUnique({ where: { id: pending.id } })).toMatchObject({
@@ -138,9 +209,15 @@ describe('NotificationRepository', () => {
 describe('SettingsRepository', () => {
   it('returns and updates the singleton owner settings', async () => {
     const settings = new SettingsRepository(prisma);
-    await prisma.settings.create({
-      data: {
+    await prisma.settings.upsert({
+      where: { id: SETTINGS_SINGLETON_ID },
+      create: {
         id: SETTINGS_SINGLETON_ID,
+        notificationEmail: 'owner@example.com',
+        timezone: 'Africa/Casablanca',
+        defaultAlertTime: '09:00',
+      },
+      update: {
         notificationEmail: 'owner@example.com',
         timezone: 'Africa/Casablanca',
         defaultAlertTime: '09:00',

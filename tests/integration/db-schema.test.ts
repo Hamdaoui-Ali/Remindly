@@ -11,6 +11,28 @@ afterEach(async () => {
 });
 
 describe('database schema', () => {
+  it('allows only the singleton settings row', async () => {
+    await prisma.settings.upsert({
+      where: { id: 'singleton' },
+      create: {
+        id: 'singleton',
+        notificationEmail: 'owner@example.com',
+        timezone: 'Africa/Casablanca',
+        defaultAlertTime: '09:00',
+      },
+      update: {},
+    });
+
+    await expect(prisma.settings.create({
+      data: {
+        id: 'not-the-singleton',
+        notificationEmail: 'other@example.com',
+        timezone: 'Africa/Casablanca',
+        defaultAlertTime: '09:00',
+      },
+    })).rejects.toThrow();
+  });
+
   it('enforces one notification channel and schedule per reminder cycle', async () => {
     const name = `Schema check ${crypto.randomUUID()}`;
     testNames.push(name);

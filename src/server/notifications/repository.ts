@@ -1,5 +1,7 @@
 import type {
   Notification,
+  NotificationChannel,
+  NotificationStatus,
   Prisma,
   PrismaClient,
 } from '@/generated/prisma/client';
@@ -10,107 +12,140 @@ export interface CreatePendingNotification {
   reminderId: string;
   scheduledFor: Date;
   idempotencyKey: string;
+  channel: NotificationChannel;
+  status: NotificationStatus;
 }
 
-export interface SentNotification {
-  providerMessageId?: string;
-  sentAt: Date;
+export interface DueNotificationCandidatesQuery {
+  now: Date;
+  scheduledForStatuses: NotificationStatus[];
+  nextAttemptStatuses: NotificationStatus[];
+  limit: number;
 }
 
-export interface FailedNotification {
-  lastError: string;
-  nextAttemptAt: Date | null;
+export interface NotificationTransition {
+  status: NotificationStatus;
+  providerMessageId?: string | null;
+  sentAt?: Date | null;
+  nextAttemptAt?: Date | null;
+  processingStartedAt?: Date | null;
+  lastError?: string | null;
 }
 
+export interface ClaimPendingNotification extends NotificationTransition {
+  id: string;
+  expectedStatuses: NotificationStatus[];
+  processingStartedAt: Date | null;
+  incrementAttemptCount: boolean;
+}
+
+export interface NotificationStatusTransition {
+  expectedStatus: NotificationStatus;
+  status: NotificationStatus;
+}
+
+export interface ReclaimExpiredProcessing extends NotificationStatusTransition {
+  leaseExpiredBefore: Date;
+  processingStartedAt: Date | null;
+  incrementAttemptCount: boolean;
+}
+
+/**
+ * Persistence primitives only. Task 5 selects eligible statuses, retry timing,
+ * the 15-minute lease cutoff, and all lifecycle transition values.
+ */
 export class NotificationRepository {
   constructor(private readonly db: NotificationDatabase) {}
 
   createPending(input: CreatePendingNotification): Promise<Notification> {
-    return this.db.notification.create({
-      data: { ...input, channel: 'EMAIL', status: 'PENDING' },
-    });
+    return this.db.notification.create({ data: input });
   }
 
-  async cancelPendingForReminder(reminderId: string): Promise<number> {
+  async cancelPendingForReminder(
+    reminderId: string,
+    transition: NotificationStatusTransition,
+  ): Promise<number> {
     const result = await this.db.notification.updateMany({
-      where: { reminderId, status: 'PENDING' },
-      data: { status: 'CANCELLED' },
+      where: { reminderId, status: transition.expectedStatus },
+      data: { status: transition.status },
     });
     return result.count;
   }
 
-  findDueCandidates(now: Date, limit: number): Promise<Notification[]> {
+  findDueCandidates(query: DueNotificationCandidatesQuery): Promise<Notification[]> {
     return this.db.notification.findMany({
       where: {
         OR: [
-          { status: 'PENDING', scheduledFor: { lte: now } },
-          { status: 'FAILED', nextAttemptAt: { lte: now } },
+          {
+            status: { in: query.scheduledForStatuses },
+            scheduledFor: { lte: query.now },
+          },
+          {
+            status: { in: query.nextAttemptStatuses },
+            nextAttemptAt: { lte: query.now },
+          },
         ],
       },
       orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }],
-      take: limit,
+      take: query.limit,
     });
   }
 
-  async claimPending(id: string, now: Date): Promise<Notification | null> {
+  async claimPending(input: ClaimPendingNotification): Promise<Notification | null> {
+    const data: Prisma.NotificationUpdateManyMutationInput = {
+      status: input.status,
+      processingStartedAt: input.processingStartedAt,
+      providerMessageId: input.providerMessageId,
+      sentAt: input.sentAt,
+      nextAttemptAt: input.nextAttemptAt,
+      lastError: input.lastError,
+    };
+    if (input.incrementAttemptCount) {
+      data.attemptCount = { increment: 1 };
+    }
+
     const result = await this.db.notification.updateMany({
       where: {
-        id,
-        OR: [
-          { status: 'PENDING', scheduledFor: { lte: now } },
-          { status: 'FAILED', nextAttemptAt: { lte: now } },
-        ],
+        id: input.id,
+        status: { in: input.expectedStatuses },
       },
-      data: {
-        status: 'PROCESSING',
-        processingStartedAt: now,
-        attemptCount: { increment: 1 },
-      },
+      data,
     });
 
     return result.count === 1
-      ? this.db.notification.findUnique({ where: { id } })
+      ? this.db.notification.findUnique({ where: { id: input.id } })
       : null;
   }
 
-  markSent(id: string, input: SentNotification): Promise<Notification> {
+  markSent(id: string, transition: NotificationTransition): Promise<Notification> {
     return this.db.notification.update({
       where: { id },
-      data: {
-        status: 'SENT',
-        providerMessageId: input.providerMessageId,
-        sentAt: input.sentAt,
-        nextAttemptAt: null,
-        processingStartedAt: null,
-        lastError: null,
-      },
+      data: transition,
     });
   }
 
-  markFailed(id: string, input: FailedNotification): Promise<Notification> {
+  markFailed(id: string, transition: NotificationTransition): Promise<Notification> {
     return this.db.notification.update({
       where: { id },
-      data: {
-        status: 'FAILED',
-        lastError: input.lastError,
-        nextAttemptAt: input.nextAttemptAt,
-        processingStartedAt: null,
-      },
+      data: transition,
     });
   }
 
-  async reclaimExpiredProcessing(now: Date): Promise<number> {
-    const leaseExpiredBefore = new Date(now.getTime() - 15 * 60 * 1000);
+  async reclaimExpiredProcessing(input: ReclaimExpiredProcessing): Promise<number> {
+    const data: Prisma.NotificationUpdateManyMutationInput = {
+      status: input.status,
+      processingStartedAt: input.processingStartedAt,
+    };
+    if (input.incrementAttemptCount) {
+      data.attemptCount = { increment: 1 };
+    }
+
     const result = await this.db.notification.updateMany({
       where: {
-        status: 'PROCESSING',
-        processingStartedAt: { lt: leaseExpiredBefore },
+        status: input.expectedStatus,
+        processingStartedAt: { lt: input.leaseExpiredBefore },
       },
-      data: {
-        status: 'PENDING',
-        processingStartedAt: null,
-        attemptCount: { increment: 1 },
-      },
+      data,
     });
     return result.count;
   }

@@ -72,6 +72,8 @@ model Notification {
 }
 
 model Settings {
+  /// The PostgreSQL CHECK constraint in migration 20260819020000_enforce_settings_singleton
+  /// restricts this primary key to `singleton`; Prisma schema syntax cannot express CHECK constraints.
   id               String   @id
   notificationEmail String  @map("notification_email")
   timezone         String

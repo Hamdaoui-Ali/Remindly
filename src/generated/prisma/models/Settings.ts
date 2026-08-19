@@ -371,6 +371,10 @@ export type $SettingsPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
   name: "Settings"
   objects: {}
   scalars: runtime.Types.Extensions.GetPayloadResult<{
+    /**
+     * The PostgreSQL CHECK constraint in migration 20260819020000_enforce_settings_singleton
+     * restricts this primary key to `singleton`; Prisma schema syntax cannot express CHECK constraints.
+     */
     id: string
     notificationEmail: string
     timezone: string
