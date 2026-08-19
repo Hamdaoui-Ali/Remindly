@@ -1,0 +1,64 @@
+{
+  "browser": "Playwright Chromium",
+  "desktop": {
+    "dashboardOverflow": {
+      "bodyScroll": 1440,
+      "bodyClient": 1440,
+      "rootScroll": 1440,
+      "rootClient": 1440
+    },
+    "remindersOverflow": {
+      "bodyScroll": 1440,
+      "bodyClient": 1440,
+      "rootScroll": 1440,
+      "rootClient": 1440
+    },
+    "settingsOverflow": {
+      "bodyScroll": 1440,
+      "bodyClient": 1440,
+      "rootScroll": 1440,
+      "rootClient": 1440
+    }
+  },
+  "mobile": {
+    "dashboardOverflow": {
+      "bodyScroll": 390,
+      "bodyClient": 390,
+      "rootScroll": 390,
+      "rootClient": 390
+    },
+    "remindersOverflow": {
+      "bodyScroll": 390,
+      "bodyClient": 390,
+      "rootScroll": 390,
+      "rootClient": 390
+    },
+    "settingsOverflow": {
+      "bodyScroll": 390,
+      "bodyClient": 390,
+      "rootScroll": 390,
+      "rootClient": 390
+    }
+  },
+  "accessibility": {
+    "desktopFocus": {
+      "outlineStyle": "solid",
+      "outlineWidth": "3px",
+      "boxShadow": "none"
+    },
+    "drawerInitialFocus": {
+      "contained": true,
+      "label": "Close Add reminder",
+      "id": ""
+    },
+    "drawerEscapeAndFocusRestore": true,
+    "rowMenuKeyboard": true,
+    "settingsKeyboardOrder": true,
+    "reducedMotion": {
+      "animationDuration": "1e-05s",
+      "transitionDuration": "1e-05s"
+    },
+    "mobileNavEscapeAndFocusRestore": true
+  },
+  "consoleIssues": []
+}

@@ -184,8 +184,8 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
             {feedback ? <InlineNotice tone={feedback.tone}>{feedback.message}</InlineNotice> : null}
           </div>
           <div className="settings-form__actions">
-            <Button type="button" variant="secondary" disabled={pending} onClick={cancel}>Cancel</Button>
             <Button type="submit" pending={pending}>Save changes</Button>
+            <Button type="button" variant="secondary" disabled={pending} onClick={cancel}>Cancel</Button>
           </div>
         </div>
       </form>
