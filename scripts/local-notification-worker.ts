@@ -1,4 +1,4 @@
-import { loadEnvConfig } from '@next/env';
+import nextEnv from '@next/env';
 import {
   formatSchedulerCycleResult,
 } from '../src/server/notifications/scheduler-client';
@@ -8,6 +8,7 @@ import {
 } from '../src/server/notifications/local-worker';
 
 const abortController = new AbortController();
+const { loadEnvConfig } = nextEnv;
 
 loadEnvConfig(process.cwd());
 const config = localNotificationWorkerConfig(process.env);
