@@ -12,9 +12,16 @@ describe('reminderInputSchema', () => {
     { name: '', endDate: '2026-02-28', leadDays: 7, alertTime: '09:30' },
     { name: 'a'.repeat(121), endDate: '2026-02-28', leadDays: 7, alertTime: '09:30' },
     { name: 'Valid', endDate: '2026-02-30', leadDays: 7, alertTime: '09:30' },
-    { name: 'Valid', endDate: '2026-02-28', leadDays: 2, alertTime: '09:30' },
     { name: 'Valid', endDate: '2026-02-28', leadDays: 7, alertTime: '24:00' },
   ])('rejects invalid input %#', (input) => {
     expect(reminderInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it('accepts a non-preset custom calendar lead', () => {
+    expect(reminderInputSchema.parse({ ...valid, leadDays: 2 }).leadDays).toBe(2);
+  });
+
+  it.each([-1, 1.5, 36_501])('rejects an invalid calendar lead of %s days', (leadDays) => {
+    expect(reminderInputSchema.safeParse({ ...valid, leadDays }).success).toBe(false);
   });
 });

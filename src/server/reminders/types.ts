@@ -4,7 +4,7 @@ import type { Urgency } from '@/server/urgency/types';
 export interface CreateReminderInput {
   name: string;
   endDate: string;
-  leadDays: 0 | 1 | 3 | 7 | 14 | 30;
+  leadDays: number;
   alertTime: string;
   /** Accepted for API compatibility; schedules always use the singleton settings timezone. */
   timezone?: string;
@@ -13,7 +13,7 @@ export interface CreateReminderInput {
 export interface UpdateReminderInput {
   name?: string;
   endDate?: string;
-  leadDays?: 0 | 1 | 3 | 7 | 14 | 30;
+  leadDays?: number;
   alertTime?: string;
 }
 

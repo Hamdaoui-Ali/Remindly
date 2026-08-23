@@ -57,7 +57,7 @@ afterEach(async () => {
 
 function input(name: string, overrides: Partial<{
   endDate: string;
-  leadDays: 0 | 1 | 3 | 7 | 14 | 30;
+  leadDays: number;
   alertTime: string;
   timezone: string;
 }> = {}) {
@@ -155,6 +155,18 @@ describe('ReminderService lifecycle', () => {
       timezone: 'UTC',
     });
 
+    expect(cycle.reminder.alertAt.toISOString()).toBe('2026-03-22T08:30:00.000Z');
+    expect(cycle.notification.scheduledFor).toEqual(cycle.reminder.alertAt);
+  });
+
+  it('creates an exact notification for a non-preset calendar lead', async () => {
+    const cycle = await createFixture({
+      endDate: '2026-03-24',
+      leadDays: 2,
+      alertTime: '09:30',
+    });
+
+    expect(cycle.reminder.alertLeadDays).toBe(2);
     expect(cycle.reminder.alertAt.toISOString()).toBe('2026-03-22T08:30:00.000Z');
     expect(cycle.notification.scheduledFor).toEqual(cycle.reminder.alertAt);
   });
