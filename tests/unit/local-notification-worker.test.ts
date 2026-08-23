@@ -19,6 +19,7 @@ describe('localNotificationWorkerConfig', () => {
   it.each([
     [{ SCHEDULER_SECRET: 'scheduler-secret-123456' }, 'APP_URL must be configured'],
     [{ APP_URL: 'not a URL', SCHEDULER_SECRET: 'scheduler-secret-123456' }, 'APP_URL must be a valid URL'],
+    [{ APP_URL: 'ftp://localhost:3000', SCHEDULER_SECRET: 'scheduler-secret-123456' }, 'APP_URL must use HTTP or HTTPS'],
     [{ APP_URL: 'http://localhost:3000', SCHEDULER_SECRET: 'short' }, 'SCHEDULER_SECRET must contain at least 16 characters'],
   ])('rejects invalid worker configuration %#', (environment, message) => {
     expect(() => localNotificationWorkerConfig(environment)).toThrow(message);

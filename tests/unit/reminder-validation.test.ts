@@ -21,6 +21,10 @@ describe('reminderInputSchema', () => {
     expect(reminderInputSchema.parse({ ...valid, leadDays: 2 }).leadDays).toBe(2);
   });
 
+  it('accepts the maximum calendar lead of 36,500 days', () => {
+    expect(reminderInputSchema.parse({ ...valid, leadDays: 36_500 }).leadDays).toBe(36_500);
+  });
+
   it.each([-1, 1.5, 36_501])('rejects an invalid calendar lead of %s days', (leadDays) => {
     expect(reminderInputSchema.safeParse({ ...valid, leadDays }).success).toBe(false);
   });

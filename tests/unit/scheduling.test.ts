@@ -31,6 +31,13 @@ describe('calculateAlertAt', () => {
     expect(calculateReminderDate('2028-03-01', 1)).toBe('2028-02-29');
   });
 
+  it('accepts the maximum calendar lead of 36,500 days', () => {
+    expect(calculateReminderDate('2126-01-01', 36_500)).toBe('2026-01-25');
+    expect(calculateAlertAt({
+      endDate: '2126-01-01', leadDays: 36_500, alertTime: '09:30', timezone: 'UTC',
+    }).toISOString()).toBe('2026-01-25T09:30:00.000Z');
+  });
+
   it('rejects lead days above the maximum calendar bound', () => {
     expect(() => calculateReminderDate('2026-03-01', 36_501))
       .toThrow('Invalid alert lead days');

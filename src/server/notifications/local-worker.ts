@@ -19,10 +19,14 @@ export function localNotificationWorkerConfig(
   const appUrl = environment.APP_URL?.trim();
   const schedulerSecret = environment.SCHEDULER_SECRET?.trim();
   if (!appUrl) throw new Error('APP_URL must be configured');
+  let parsedAppUrl: URL;
   try {
-    new URL(appUrl);
+    parsedAppUrl = new URL(appUrl);
   } catch {
     throw new Error('APP_URL must be a valid URL');
+  }
+  if (parsedAppUrl.protocol !== 'http:' && parsedAppUrl.protocol !== 'https:') {
+    throw new Error('APP_URL must use HTTP or HTTPS');
   }
   if (!schedulerSecret || schedulerSecret.length < 16) {
     throw new Error('SCHEDULER_SECRET must contain at least 16 characters');

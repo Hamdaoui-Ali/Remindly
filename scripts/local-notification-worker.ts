@@ -10,7 +10,7 @@ import {
 const abortController = new AbortController();
 const { loadEnvConfig } = nextEnv;
 
-loadEnvConfig(process.cwd());
+loadEnvConfig(process.cwd(), true);
 const config = localNotificationWorkerConfig(process.env);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

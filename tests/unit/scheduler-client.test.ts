@@ -28,6 +28,7 @@ describe('scheduler client', () => {
     expect(fetchImpl).toHaveBeenNthCalledWith(2, 'http://localhost:3000/api/internal/process-due-notifications', expect.objectContaining({
       method: 'POST',
       headers: { 'x-scheduler-secret': input.schedulerSecret },
+      redirect: 'error',
       signal: abortController.signal,
     }));
   });

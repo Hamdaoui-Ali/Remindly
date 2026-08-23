@@ -55,6 +55,7 @@ export async function runSchedulerCycle(input: SchedulerCycleInput): Promise<Sch
       {
         method: 'POST',
         headers: { 'x-scheduler-secret': input.schedulerSecret },
+        redirect: 'error',
         signal: input.signal,
       },
     );

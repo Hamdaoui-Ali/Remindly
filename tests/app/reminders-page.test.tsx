@@ -108,6 +108,42 @@ describe('RemindersPage', () => {
     expect(screen.getByLabelText('Reminder date')).toHaveAttribute('type', 'date');
   });
 
+  it('requires a reminder date when Custom is selected', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Custom reminder');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-26' } });
+    await user.selectOptions(screen.getByLabelText('Remind me'), 'custom');
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(screen.getByText('Choose a reminder date.')).toHaveAttribute('role', 'alert');
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('preserves a custom date when the end date changes and blocks an invalid relation', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Preserved custom date');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-26' } });
+    await user.selectOptions(screen.getByLabelText('Remind me'), 'custom');
+    fireEvent.change(screen.getByLabelText('Reminder date'), { target: { value: '2026-08-24' } });
+
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-23' } });
+
+    expect(screen.getByLabelText('Reminder date')).toHaveValue('2026-08-24');
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+    expect(screen.getByText('Reminder date must be on or before the end date.')).toBeVisible();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('blocks a custom reminder date after the end date', async () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);
