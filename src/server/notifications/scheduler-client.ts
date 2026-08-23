@@ -20,6 +20,7 @@ export type SchedulerFetch = (
 export interface SchedulerCycleInput {
   appUrl: string;
   schedulerSecret: string;
+  signal?: AbortSignal;
   fetchImpl?: SchedulerFetch;
 }
 
@@ -40,13 +41,24 @@ export async function runSchedulerCycle(input: SchedulerCycleInput): Promise<Sch
   const fetchImpl = input.fetchImpl ?? fetch;
   const baseUrl = input.appUrl.endsWith('/') ? input.appUrl : `${input.appUrl}/`;
   try {
-    const health = await fetchImpl(new URL('api/health', baseUrl).toString(), { method: 'GET' });
+    if (input.signal?.aborted) return { kind: 'unavailable' };
+
+    const health = await fetchImpl(new URL('api/health', baseUrl).toString(), {
+      method: 'GET',
+      signal: input.signal,
+    });
     if (!health.ok) return { kind: 'not-ready', status: health.status };
+    if (input.signal?.aborted) return { kind: 'unavailable' };
 
     const response = await fetchImpl(
       new URL('api/internal/process-due-notifications', baseUrl).toString(),
-      { method: 'POST', headers: { 'x-scheduler-secret': input.schedulerSecret } },
+      {
+        method: 'POST',
+        headers: { 'x-scheduler-secret': input.schedulerSecret },
+        signal: input.signal,
+      },
     );
+    if (input.signal?.aborted) return { kind: 'unavailable' };
     if (!response.ok) return { kind: 'rejected', status: response.status };
     const counts = processorCounts(await response.json().catch(() => null));
     return counts

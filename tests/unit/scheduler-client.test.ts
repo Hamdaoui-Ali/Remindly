@@ -11,20 +11,56 @@ const input = {
 
 describe('scheduler client', () => {
   it('checks health before processing and returns aggregate counts', async () => {
+    const abortController = new AbortController();
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', database: 'ok' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ claimed: 1, sent: 1, failed: 0, recovered: 0 }), { status: 200 }));
 
-    await expect(runSchedulerCycle({ ...input, fetchImpl })).resolves.toEqual({
+    await expect(runSchedulerCycle({ ...input, signal: abortController.signal, fetchImpl })).resolves.toEqual({
       kind: 'processed',
       status: 200,
       counts: { claimed: 1, sent: 1, failed: 0, recovered: 0 },
     });
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'http://localhost:3000/api/health', expect.objectContaining({ method: 'GET' }));
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'http://localhost:3000/api/health', expect.objectContaining({
+      method: 'GET',
+      signal: abortController.signal,
+    }));
     expect(fetchImpl).toHaveBeenNthCalledWith(2, 'http://localhost:3000/api/internal/process-due-notifications', expect.objectContaining({
       method: 'POST',
       headers: { 'x-scheduler-secret': input.schedulerSecret },
+      signal: abortController.signal,
     }));
+  });
+
+  it('cancels an active health fetch and never begins processor processing', async () => {
+    const abortController = new AbortController();
+    const fetchImpl = vi.fn(() => new Promise<Response>((_resolve, reject) => {
+      abortController.signal.addEventListener('abort', () => {
+        reject(new DOMException('aborted', 'AbortError'));
+      }, { once: true });
+    }));
+
+    const cycle = runSchedulerCycle({ ...input, signal: abortController.signal, fetchImpl });
+    abortController.abort();
+
+    await expect(cycle).resolves.toEqual({ kind: 'unavailable' });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl).toHaveBeenCalledWith('http://localhost:3000/api/health', expect.objectContaining({
+      signal: abortController.signal,
+    }));
+  });
+
+  it('does not begin processor processing after health completes into cancellation', async () => {
+    const abortController = new AbortController();
+    const fetchImpl = vi.fn(() => {
+      abortController.abort();
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+
+    await expect(runSchedulerCycle({ ...input, signal: abortController.signal, fetchImpl })).resolves.toEqual({
+      kind: 'unavailable',
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it('does not process while health is unavailable', async () => {

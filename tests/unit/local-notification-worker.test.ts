@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   LOCAL_NOTIFICATION_POLL_INTERVAL_MILLISECONDS,
   localNotificationWorkerConfig,
@@ -23,6 +23,10 @@ describe('localNotificationWorkerConfig', () => {
   ])('rejects invalid worker configuration %#', (environment, message) => {
     expect(() => localNotificationWorkerConfig(environment)).toThrow(message);
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 it('runs immediately and waits 30 seconds between cycles', async () => {
@@ -87,4 +91,80 @@ it('continues polling after a rejected processor cycle', async () => {
   });
 
   expect(onResult.mock.calls.map(([result]) => result.kind)).toEqual(['rejected', 'processed']);
+});
+
+it('does not fetch for an already-aborted worker input', async () => {
+  const abortController = new AbortController();
+  const fetchImpl = vi.fn();
+  const onResult = vi.fn();
+  abortController.abort();
+
+  await runLocalNotificationWorker({
+    appUrl: 'http://localhost:3000',
+    schedulerSecret: 'scheduler-secret-123456',
+    signal: abortController.signal,
+    fetchImpl,
+    onResult,
+  });
+
+  expect(fetchImpl).not.toHaveBeenCalled();
+  expect(onResult).not.toHaveBeenCalled();
+});
+
+it('cancels the default wait and removes its abort listener', async () => {
+  const abortController = new AbortController();
+  const addEventListener = vi.spyOn(abortController.signal, 'addEventListener');
+  const removeEventListener = vi.spyOn(abortController.signal, 'removeEventListener');
+  const fetchImpl = vi.fn((input: string | URL | Request) => Promise.resolve(
+    String(input).endsWith('/api/health')
+      ? new Response('{}', { status: 200 })
+      : new Response(JSON.stringify({ claimed: 0, sent: 0, failed: 0, recovered: 0 }), { status: 200 }),
+  ));
+
+  await runLocalNotificationWorker({
+    appUrl: 'http://localhost:3000',
+    schedulerSecret: 'scheduler-secret-123456',
+    signal: abortController.signal,
+    fetchImpl,
+    onResult: () => queueMicrotask(() => abortController.abort()),
+  });
+
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+  expect(addEventListener).toHaveBeenCalledOnce();
+  expect(removeEventListener).toHaveBeenCalledWith('abort', expect.any(Function));
+});
+
+it('removes default wait listeners after normal timer resolution without accumulation', async () => {
+  vi.useFakeTimers();
+  const abortController = new AbortController();
+  const addEventListener = vi.spyOn(abortController.signal, 'addEventListener');
+  const removeEventListener = vi.spyOn(abortController.signal, 'removeEventListener');
+  const fetchImpl = vi.fn((input: string | URL | Request) => Promise.resolve(
+    String(input).endsWith('/api/health')
+      ? new Response('{}', { status: 200 })
+      : new Response(JSON.stringify({ claimed: 0, sent: 0, failed: 0, recovered: 0 }), { status: 200 }),
+  ));
+  let results = 0;
+  let removalsBeforeAbort = -1;
+
+  const worker = runLocalNotificationWorker({
+    appUrl: 'http://localhost:3000',
+    schedulerSecret: 'scheduler-secret-123456',
+    signal: abortController.signal,
+    fetchImpl,
+    onResult: () => {
+      results += 1;
+      if (results === 3) {
+        removalsBeforeAbort = removeEventListener.mock.calls.length;
+        abortController.abort();
+      }
+    },
+  });
+
+  await vi.advanceTimersByTimeAsync(LOCAL_NOTIFICATION_POLL_INTERVAL_MILLISECONDS * 2);
+  await worker;
+
+  expect(addEventListener).toHaveBeenCalledTimes(2);
+  expect(removalsBeforeAbort).toBe(2);
+  expect(removeEventListener).toHaveBeenCalledTimes(2);
 });
