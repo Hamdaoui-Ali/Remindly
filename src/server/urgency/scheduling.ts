@@ -2,6 +2,7 @@ import { fromZonedTime } from 'date-fns-tz';
 import { isValidCalendarDate } from './calendar';
 
 const MILLISECONDS_PER_DAY = 86_400_000;
+export const MAX_ALERT_LEAD_DAYS = 36_500;
 
 export interface AlertScheduleInput {
   endDate: string;
@@ -27,7 +28,9 @@ export function calculateLeadDays(endDate: string, reminderDate: string): number
 }
 
 export function calculateReminderDate(endDate: string, leadDays: number): string {
-  if (!Number.isInteger(leadDays) || leadDays < 0) throw new Error('Invalid alert lead days');
+  if (!Number.isInteger(leadDays) || leadDays < 0 || leadDays > MAX_ALERT_LEAD_DAYS) {
+    throw new Error('Invalid alert lead days');
+  }
   return new Date(calendarDateMilliseconds(endDate) - leadDays * MILLISECONDS_PER_DAY)
     .toISOString()
     .slice(0, 10);

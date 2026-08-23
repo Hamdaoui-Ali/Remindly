@@ -31,6 +31,14 @@ describe('calculateAlertAt', () => {
     expect(calculateReminderDate('2028-03-01', 1)).toBe('2028-02-29');
   });
 
+  it('rejects lead days above the maximum calendar bound', () => {
+    expect(() => calculateReminderDate('2026-03-01', 36_501))
+      .toThrow('Invalid alert lead days');
+    expect(() => calculateAlertAt({
+      endDate: '2026-03-01', leadDays: 36_501, alertTime: '09:30', timezone: 'UTC',
+    })).toThrow('Invalid alert lead days');
+  });
+
   it('rejects a reminder date after the end date', () => {
     expect(() => calculateLeadDays('2026-08-23', '2026-08-24'))
       .toThrow('Reminder date must be on or before the end date');

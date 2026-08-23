@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { isValidCalendarDate } from '@/server/urgency/calendar';
+import { MAX_ALERT_LEAD_DAYS } from '@/server/urgency/scheduling';
 
 export const alertTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Enter a time in 24-hour HH:MM format');
-export const MAX_ALERT_LEAD_DAYS = 36_500;
 export const alertLeadDaysSchema = z.number().int().min(0).max(MAX_ALERT_LEAD_DAYS);
 
 const reminderFields = z.object({
