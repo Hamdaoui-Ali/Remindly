@@ -44,11 +44,13 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npx prisma db seed
    ```
 
-5. Start the application:
+5. Start Next.js and the 30-second local notification worker:
 
    ```powershell
    npm run dev
    ```
+
+   `npm run dev` keeps both processes in one terminal. Keep that terminal running for email reminders. Use `npm run dev:web` only when intentionally developing without automatic email processing.
 
    Open `http://localhost:3000/login` and sign in with `OWNER_EMAIL` and the plaintext password that produced `OWNER_PASSWORD_HASH`.
 
@@ -104,6 +106,8 @@ The workflow in `.github/workflows/process-due-notifications.yml` calls the proc
 - `SCHEDULER_SECRET`: the same random value deployed as the application's `SCHEDULER_SECRET`
 
 The workflow captures the response status and explicitly accepts only HTTP 200–299. Redirects, authentication failures, and all other responses fail visibly in Actions. GitHub scheduled workflows are best effort; the processor's due-time query recovers work after delayed or missed triggers.
+
+The local worker attempts due processing every 30 seconds, so Remindly normally submits local reminders within one minute. The GitHub Actions fallback still runs every ten minutes and does not provide the same timing guarantee.
 
 ## Production environment
 
