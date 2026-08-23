@@ -98,6 +98,65 @@ describe('RemindersPage', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it('reveals an exact reminder date when Custom is selected', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.selectOptions(screen.getByLabelText('Remind me'), 'custom');
+
+    expect(screen.getByLabelText('Reminder date')).toHaveAttribute('type', 'date');
+  });
+
+  it('blocks a custom reminder date after the end date', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Invalid custom date');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-23' } });
+    await user.selectOptions(screen.getByLabelText('Remind me'), 'custom');
+    fireEvent.change(screen.getByLabelText('Reminder date'), { target: { value: '2026-08-24' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(screen.getByText('Reminder date must be on or before the end date.')).toBeVisible();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('submits a custom date as its calendar-day lead', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ cycle: { reminder: reminder({ leadDays: 2 }) } }),
+    });
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Two days before');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-26' } });
+    await user.selectOptions(screen.getByLabelText('Remind me'), 'custom');
+    fireEvent.change(screen.getByLabelText('Reminder date'), { target: { value: '2026-08-24' } });
+    fireEvent.change(screen.getByLabelText('At'), { target: { value: '10:15' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    const body = JSON.parse(request.mock.calls[0]?.[1]?.body as string);
+    expect(body).toMatchObject({ endDate: '2026-08-26', leadDays: 2, alertTime: '10:15' });
+  });
+
+  it('reopens a non-preset lead as its exact custom date', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[reminder({ endDate: '2026-08-26', leadDays: 2 })]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /actions for passport renewal/i }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Remind me')).toHaveValue('custom');
+    expect(screen.getByLabelText('Reminder date')).toHaveValue('2026-08-24');
+  });
+
   it('refreshes server data and closes the drawer after a successful create', async () => {
     const request = vi.fn().mockResolvedValue({
       ok: true,

@@ -9,7 +9,11 @@ import { Field } from '@/components/ui/field';
 import { InlineNotice } from '@/components/ui/inline-notice';
 import { Select } from '@/components/ui/select';
 import type { ReminderListPresentation } from '@/server/reminders/presenters';
-import { calculateAlertAt } from '@/server/urgency/scheduling';
+import {
+  calculateAlertAt,
+  calculateLeadDays,
+  calculateReminderDate,
+} from '@/server/urgency/scheduling';
 
 export type DrawerMode = 'add' | 'edit' | 'renew';
 
@@ -28,8 +32,12 @@ type FormValues = {
   name: string;
   endDate: string;
   leadDays: string;
+  customAlertDate: string;
   alertTime: string;
 };
+
+const CUSTOM_LEAD_DAYS = 'custom';
+const PRESET_LEAD_DAYS = new Set(['0', '1', '3', '7', '14', '30']);
 
 const LEAD_OPTIONS = [
   ['0', 'Same day'],
@@ -38,18 +46,30 @@ const LEAD_OPTIONS = [
   ['7', '7 days before'],
   ['14', '14 days before'],
   ['30', '30 days before'],
+  [CUSTOM_LEAD_DAYS, 'Custom date and time'],
 ] as const;
+
+function selectedLeadDays(values: FormValues): number {
+  return values.leadDays === CUSTOM_LEAD_DAYS
+    ? calculateLeadDays(values.endDate, values.customAlertDate)
+    : Number(values.leadDays);
+}
 
 function initialValues(mode: DrawerMode, reminder: ReminderListPresentation | null, defaultAlertTime: string): FormValues {
   if (reminder && mode !== 'add') {
+    const storedLeadDays = String(reminder.alertLeadDays);
+    const preset = PRESET_LEAD_DAYS.has(storedLeadDays);
     return {
       name: reminder.name,
       endDate: reminder.endDate,
-      leadDays: String(reminder.alertLeadDays),
+      leadDays: preset ? storedLeadDays : CUSTOM_LEAD_DAYS,
+      customAlertDate: preset
+        ? ''
+        : calculateReminderDate(reminder.endDate, reminder.alertLeadDays),
       alertTime: reminder.alertTime,
     };
   }
-  return { name: '', endDate: '', leadDays: '7', alertTime: defaultAlertTime };
+  return { name: '', endDate: '', leadDays: '7', customAlertDate: '', alertTime: defaultAlertTime };
 }
 
 function validates(values: FormValues) {
@@ -57,6 +77,17 @@ function validates(values: FormValues) {
   if (!values.name.trim()) errors.name = 'Enter a reminder name.';
   if (!values.endDate) errors.endDate = 'Choose an end date.';
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.alertTime)) errors.alertTime = 'Choose a valid alert time.';
+  if (values.leadDays === CUSTOM_LEAD_DAYS) {
+    if (!values.customAlertDate) {
+      errors.customAlertDate = 'Choose a reminder date.';
+    } else if (values.endDate) {
+      try {
+        calculateLeadDays(values.endDate, values.customAlertDate);
+      } catch {
+        errors.customAlertDate = 'Reminder date must be on or before the end date.';
+      }
+    }
+  }
   return errors;
 }
 
@@ -66,7 +97,7 @@ function alertAlreadyDue(values: FormValues, timezone: string) {
     return calculateAlertAt({
       endDate: values.endDate,
       alertTime: values.alertTime,
-      leadDays: Number(values.leadDays),
+      leadDays: selectedLeadDays(values),
       timezone,
     }).getTime() < Date.now();
   } catch {
@@ -98,7 +129,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
     const body = {
       name: values.name.trim(),
       endDate: values.endDate,
-      leadDays: Number(values.leadDays) as 0 | 1 | 3 | 7 | 14 | 30,
+      leadDays: selectedLeadDays(values),
       alertTime: values.alertTime,
     };
     const url = mode === 'add'
@@ -156,6 +187,21 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
             {LEAD_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
         </Field>
+        {values.leadDays === CUSTOM_LEAD_DAYS ? (
+          <Field
+            htmlFor="reminder-custom-alert-date"
+            label="Reminder date"
+            error={errors.customAlertDate}
+          >
+            <input
+              id="reminder-custom-alert-date"
+              name="customAlertDate"
+              type="date"
+              value={values.customAlertDate}
+              onChange={(event) => update('customAlertDate', event.target.value)}
+            />
+          </Field>
+        ) : null}
         <Field htmlFor="reminder-alert-time" label="At" error={errors.alertTime}>
           <input
             name="alertTime"
