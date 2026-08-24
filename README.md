@@ -65,7 +65,18 @@ npx tsc --noEmit
 npm run build
 ```
 
-The integration tests require a migrated PostgreSQL database at `DATABASE_URL`. The end-to-end suite starts its own Next.js development server and reads its database from `E2E_DATABASE_URL`, falling back to `DATABASE_URL`:
+Vitest never runs against the application database. Before any test module imports, it resolves `DATABASE_URL` to a dedicated PostgreSQL database whose name ends in `_test` (for the default local setup, `remindly_test`). The global test setup creates that database if needed and applies the existing Prisma migrations.
+
+By default, Vitest derives the test URL from `DATABASE_URL` only when its host is `localhost` or `127.0.0.1`. For a remote or separately managed test database, set `TEST_DATABASE_URL` to a PostgreSQL URL whose database name ends in `_test`:
+
+```powershell
+$env:TEST_DATABASE_URL = 'postgresql://user:password@db.example.test:5432/remindly_ci_test'
+npm test
+```
+
+Vitest rejects non-PostgreSQL URLs, non-local implicit derivation, unsafe or ambiguous database names, and any final database name that does not end in `_test`. This applies to both `npm test` and direct `npx vitest` commands.
+
+The end-to-end suite starts its own Next.js development server and reads its database from `E2E_DATABASE_URL`, falling back to `DATABASE_URL`:
 
 ```powershell
 npx playwright install --with-deps chromium
