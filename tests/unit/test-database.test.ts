@@ -60,6 +60,36 @@ describe('resolveTestDatabaseUrl', () => {
       testDatabaseUrl: 'postgresql://ci.example.test/remindly-production_test',
     })).toThrow('safe PostgreSQL identifier');
   });
+
+  it.each([
+    'host',
+    'HOST',
+    'hostaddr',
+    'dbname',
+    'database',
+  ])('rejects a %s query parameter that can override the connection target', (parameterName) => {
+    expect(() => resolveTestDatabaseUrl({
+      databaseUrl: `postgresql://localhost/remindly?${parameterName}=example.com`,
+    })).toThrow('must not include connection override parameter');
+  });
+
+  it('rejects duplicate connection override query parameters', () => {
+    expect(() => resolveTestDatabaseUrl({
+      databaseUrl: 'postgresql://localhost/remindly?host=localhost&HOST=example.com',
+    })).toThrow('must not include connection override parameter');
+  });
+
+  it('derives a test name at PostgreSQL’s 63-byte identifier limit', () => {
+    expect(resolveTestDatabaseUrl({
+      databaseUrl: 'postgresql://localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })).toBe('postgresql://localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_test');
+  });
+
+  it('rejects a source name whose derived test name would exceed PostgreSQL’s 63-byte identifier limit', () => {
+    expect(() => resolveTestDatabaseUrl({
+      databaseUrl: 'postgresql://localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })).toThrow('at most 63 UTF-8 bytes');
+  });
 });
 
 describe('assertTestDatabaseUrl', () => {
@@ -69,5 +99,11 @@ describe('assertTestDatabaseUrl', () => {
 
   it('aborts destructive tests when the active database is the app database', () => {
     expect(() => assertTestDatabaseUrl('postgresql://localhost/remindly')).toThrow('must end with "_test"');
+  });
+
+  it('rejects a final test database name longer than PostgreSQL’s 63-byte identifier limit', () => {
+    expect(() => assertTestDatabaseUrl(
+      'postgresql://localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_test',
+    )).toThrow('at most 63 UTF-8 bytes');
   });
 });
