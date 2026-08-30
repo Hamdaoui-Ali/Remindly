@@ -16,6 +16,13 @@ export interface UpdateUserSettingsInput {
   defaultAlertTime?: string;
 }
 
+export const updateUserSettingsSchema = z.object({
+  timezone: z.string().trim().min(1, 'Enter a timezone').refine(isValidTimezone, 'Enter a valid IANA timezone').optional(),
+  defaultAlertTime: alertTimeSchema.optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, {
+  message: 'At least one setting is required',
+});
+
 export class ProfileNotConfiguredError extends Error {
   constructor() {
     super('User profile is not configured');
@@ -24,15 +31,7 @@ export class ProfileNotConfiguredError extends Error {
 }
 
 function validatePatch(input: UpdateUserSettingsInput): UpdateUserSettingsInput {
-  const parsed = z.object({
-    timezone: z.string().trim().min(1, 'Enter a timezone').optional(),
-    defaultAlertTime: alertTimeSchema.optional(),
-  }).strict().refine((value) => Object.keys(value).length > 0, {
-    message: 'At least one setting is required',
-  }).parse(input);
-  if (parsed.timezone !== undefined && !isValidTimezone(parsed.timezone)) {
-    throw new Error('Enter a valid IANA timezone');
-  }
+  const parsed = updateUserSettingsSchema.parse(input);
   return parsed;
 }
 

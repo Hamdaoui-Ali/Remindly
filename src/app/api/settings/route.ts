@@ -2,7 +2,7 @@ import { ZodError } from 'zod';
 
 import { errorResponse, jsonResponse } from '@/lib/http';
 import { requireUser } from '@/server/auth/require-user';
-import { ProfileNotConfiguredError, ProfileService } from '@/server/profile/service';
+import { ProfileNotConfiguredError, ProfileService, updateUserSettingsSchema } from '@/server/profile/service';
 import type { UpdateUserSettingsInput } from '@/server/profile/service';
 
 const service = new ProfileService();
@@ -31,7 +31,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const user = await requireUser();
   try {
-    const input = await request.json() as UpdateUserSettingsInput;
+    const input = updateUserSettingsSchema.parse(await request.json()) as UpdateUserSettingsInput;
     return jsonResponse({ settings: await service.updateSettings(user.id, input) });
   } catch (error) {
     return settingsRouteError(error);

@@ -20,7 +20,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage settings={settings} />);
 
     expect(screen.getByText(/protected access/i)).toBeVisible();
-    expect(screen.getByText(/verified/i)).toBeVisible();
+    expect(screen.getByText(/^Verified$/)).toBeVisible();
     expect(screen.getByLabelText('Verified email')).toHaveValue('owner@example.com');
     expect(screen.queryByRole('textbox', { name: /password/i })).not.toBeInTheDocument();
   });
