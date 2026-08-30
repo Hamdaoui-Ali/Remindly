@@ -1,15 +1,17 @@
 # Remindly Refactor Technical Specification
 ## Gmail API + Supabase + Vercel Architecture
 
-**Document status:** Proposed implementation specification  
+**Document status:** Proposed implementation specification<br>
+**Revision:** 2 — post-review hardening<br>
 **Project:** Remindly  
 **Prepared:** 2026-08-30  
+**Last reviewed:** 2026-08-30<br>
 **Target stack:** Next.js 16, React 19, TypeScript, Prisma 7, PostgreSQL/Supabase, Supabase Auth, Supabase Cron, Gmail API, Vercel  
 **Source baseline:** `Remindly-main(1).zip`
 
 ---
 
-## 1. Executive Summary
+# 1. Executive Summary
 
 Remindly is currently implemented as a **private, single-owner Next.js application**. The current codebase has a strong notification-processing core, including durable notification rows, bounded processing, retry state, processing leases, recovery, and provider abstraction. However, the application is not yet structured as a public multi-user reminder service.
 
@@ -25,7 +27,9 @@ The target refactor will transform Remindly into a **multi-user, serverless-read
 - preserves the existing durable notification ledger and retry architecture where possible;
 - enforces per-user ownership for every reminder operation;
 - supports multiple reminder alerts per event, including day- and hour-based offsets;
-- remains compatible with Vercel/Supabase free tiers for a personal/non-commercial beta, subject to provider limits and policies.
+- is designed to operate at `$0` for a low-volume, personal/non-commercial beta while all providers remain within their current free-tier limits and policies.
+
+The `$0` objective is an operating target, not a permanent price or availability guarantee. Provider pricing, quotas, acceptable-use rules, OAuth verification requirements, project pausing, and account enforcement can change independently of Remindly. The architecture must therefore preserve a migration path to another host, database tier, scheduler, or transactional email provider.
 
 The most important architectural rule is:
 
@@ -571,7 +575,8 @@ Create:
 ```text
 src/lib/supabase/client.ts
 src/lib/supabase/server.ts
-src/lib/supabase/middleware.ts
+src/lib/supabase/proxy.ts
+src/lib/supabase/admin.ts
 ```
 
 ### Browser client
@@ -589,6 +594,10 @@ Uses cookie-based SSR configuration.
 
 Supabase currently recommends SSR clients with cookies and PKCE-compatible flows for frameworks such as Next.js.
 
+### Admin client
+
+Uses server-only `SUPABASE_SECRET_KEY` and is never cookie-backed or exposed to the browser. Its allowed operations are limited to deleting the already authenticated current user and explicit owner-run profile reconciliation. Business repositories must not use the admin client to bypass ownership checks.
+
 ---
 
 ## 5.3 Replace owner auth helper
@@ -600,6 +609,7 @@ src/server/auth/config.ts
 src/server/auth/require-owner.ts
 src/server/auth/session-cookie.ts
 src/auth.ts
+src/middleware.ts
 src/app/api/auth/[...nextauth]/route.ts
 ```
 
@@ -642,11 +652,23 @@ as the current identity.
 
 ---
 
-## 5.4 Middleware
+## 5.4 Next.js 16 Proxy
 
-Rewrite `src/middleware.ts` for Supabase SSR session refresh.
+Next.js 16 renamed the Middleware convention to Proxy. Retire:
 
-Middleware responsibilities:
+```text
+src/middleware.ts
+```
+
+and create:
+
+```text
+src/proxy.ts
+```
+
+using the `proxy` export required by the installed Next.js documentation.
+
+Proxy responsibilities:
 
 - refresh auth cookies;
 - redirect unauthenticated page requests to `/login`;
@@ -658,9 +680,12 @@ Middleware responsibilities:
   - `/api/health`
   - `/api/internal/process-due-notifications`
   - `/api/internal/auth/send-email`;
-- do not treat middleware alone as the final authorization layer.
+- do not perform slow application-data queries;
+- do not treat Proxy as the final authorization layer.
 
 API handlers and server actions must still call `requireUser()`.
+
+Authorization checks must live close to the data source in server-only repository/service functions. Layout visibility and Proxy redirects are user-experience controls, not security boundaries.
 
 ---
 
@@ -705,10 +730,10 @@ src/app/auth/confirm/route.ts
 
 The route must follow Supabase's SSR confirmation pattern and exchange the token hash for a session.
 
-Expected redirect:
+Expected action-specific redirect, for example signup:
 
 ```text
-/auth/confirm?token_hash=...&type=email
+/auth/confirm?token_hash=...&type=signup
 ```
 
 After success:
@@ -766,6 +791,14 @@ Environment:
 SUPABASE_SEND_EMAIL_HOOK_SECRET=v1,whsec_...
 ```
 
+Normalize the dashboard-provided secret exactly once before constructing the verifier:
+
+```ts
+const webhookSecret = configuredSecret.replace(/^v1,whsec_/, '');
+```
+
+Reject startup/request configuration if the resulting secret is empty. Do not log the configured value, normalized value, raw body, or signature headers.
+
 Processing sequence:
 
 ```text
@@ -788,6 +821,36 @@ return HTTP 200 {}
 ```
 
 Never parse JSON before signature verification if the verification library expects the exact raw body.
+
+Require the Standard Webhooks ID, timestamp, and signature headers expected by the library. Keep its timestamp-tolerance/replay protection enabled. Return a sanitized error contract; do not return verifier details to callers.
+
+## 6.2.1 Five-second execution budget
+
+Supabase HTTP Auth Hooks must complete within five seconds. The endpoint therefore has a stricter contract than the reminder processor.
+
+The complete path includes:
+
+```text
+Vercel cold start
+  + Standard Webhooks verification
+  + optional Google token refresh
+  + Gmail messages.send
+  + response serialization
+```
+
+Requirements:
+
+- enforce a total route deadline below five seconds;
+- use shorter bounded timeouts for token refresh and Gmail send;
+- abort outstanding fetches when the route deadline is reached;
+- return Supabase's documented hook error shape on provider/configuration failure;
+- never perform an in-request retry after an ambiguous Gmail send timeout;
+- do not acknowledge success before Gmail returns a successful Message resource;
+- test both a warm access-token path and a cold-start/token-refresh path.
+
+Because Gmail has no idempotency key, an ambiguous hook timeout may still result in a delivered email even though Supabase reports failure. This limitation must be documented in the operational runbook.
+
+Launch gate: if deployed cold-refresh measurements cannot reliably finish below the four-second application deadline, do not enable public signup with this Vercel hook path. Re-evaluate a lower-latency hook runtime or transactional email provider; do not hide the failure by increasing a timeout beyond Supabase's limit.
 
 ---
 
@@ -827,6 +890,21 @@ Email change requires special care. Supabase documents counterintuitive token/ha
 
 The implementation must follow the Supabase hook payload contract rather than inferring recipient/hash pairing from variable names.
 
+Required mapping contract:
+
+| `email_action_type` | Recipient | Token/hash source | Confirmation type |
+|---|---|---|---|
+| `signup` | `user.email` | `token` / `token_hash` | `signup` |
+| `recovery` | `user.email` | `token` / `token_hash` | `recovery` |
+| `magiclink` | `user.email` | `token` / `token_hash` | `magiclink` |
+| `invite` | invited `user.email` | `token` / `token_hash` | `invite` |
+| `email_change`, current address | `user.email` | `token` / `token_hash_new` | `email_change` |
+| `email_change`, new address | `user.new_email` | `token_new` / `token_hash` | `email_change` |
+
+When Secure Email Change is disabled and only one token pair is present, send one message to `user.new_email` using the token/hash combination present in the payload as defined by the current Supabase contract. Zod validation must model these action variants as a discriminated union rather than one object with loosely optional fields.
+
+Before implementation, verify the table against the exact Supabase version active for the project. Contract tests must use captured redacted fixtures for each enabled action.
+
 ---
 
 ## 6.5 Auth email link generation
@@ -841,6 +919,8 @@ ${APP_URL}/auth/confirm
   &type=${actionType}
   &next=${safeRedirect}
 ```
+
+The confirmation route must pass the action-specific type to `supabase.auth.verifyOtp({ token_hash, type })`; it must not collapse all actions to `type=email`.
 
 Only permit redirects back to known Remindly origins/paths.
 
@@ -937,6 +1017,31 @@ when Supabase changes them.
 
 When using a `security definer` function, set an empty `search_path` and fully qualify relations.
 
+## 7.3 User deletion and profile repair
+
+Prisma does not manage Supabase's `auth` schema, so matching UUID values alone do not define the full user lifecycle.
+
+The Supabase integration SQL must define one authoritative deletion policy:
+
+```text
+auth.users deletion
+  -> delete public.user_profiles row
+  -> cascade to reminders
+  -> cascade to reminder_alerts
+  -> cascade to notifications
+```
+
+Prefer a database foreign key from `public.user_profiles.id` to `auth.users.id` with `ON DELETE CASCADE` when supported by the active Supabase configuration. Otherwise, use a minimal, versioned Auth deletion trigger with equivalent behavior.
+
+Add an idempotent reconciliation script that can:
+
+- create a missing profile for an existing Auth user;
+- update stale email verification metadata;
+- report orphaned profiles without logging email addresses;
+- run in dry-run mode before making repairs.
+
+Account deletion is destructive and must require recent authentication/explicit confirmation in the product flow. The retention policy for sent notification metadata must be documented before public signup is enabled; the MVP policy is full cascade deletion with the account.
+
 ---
 
 # 8. Reminder Data Model Refactor
@@ -982,6 +1087,7 @@ model ReminderAlert {
   reminderId      String              @map("reminder_id") @db.Uuid
   scheduledFor    DateTime            @map("scheduled_for") @db.Timestamptz(6)
   offsetMinutes   Int?                @map("offset_minutes")
+  scheduleVersion Int                 @default(1) @map("schedule_version")
   channel         NotificationChannel @default(EMAIL)
   enabled         Boolean             @default(true)
   createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -991,6 +1097,7 @@ model ReminderAlert {
   notifications Notification[]
 
   @@index([reminderId, scheduledFor])
+  @@unique([reminderId, scheduledFor, channel])
   @@map("reminder_alerts")
 }
 ```
@@ -1002,6 +1109,7 @@ model Notification {
   id                  String              @id @default(uuid()) @db.Uuid
   reminderAlertId     String              @map("reminder_alert_id") @db.Uuid
   scheduledFor        DateTime            @map("scheduled_for") @db.Timestamptz(6)
+  scheduleVersion     Int                 @map("schedule_version")
   channel             NotificationChannel @default(EMAIL)
   status              NotificationStatus  @default(PENDING)
   attemptCount        Int                 @default(0) @map("attempt_count")
@@ -1016,9 +1124,61 @@ model Notification {
 
   alert ReminderAlert @relation(fields: [reminderAlertId], references: [id], onDelete: Cascade)
 
-  @@unique([reminderAlertId, scheduledFor, channel])
+  @@unique([reminderAlertId, scheduleVersion, channel])
   @@index([status, nextAttemptAt, scheduledFor])
   @@map("notifications")
+}
+```
+
+### Operational ledgers
+
+These models contain no recipient address, Auth token, subject, body, or reminder content.
+
+```prisma
+enum EmailPurpose {
+  REMINDER
+  AUTH
+}
+
+enum EmailAttemptOutcome {
+  RESERVED
+  ACCEPTED
+  DEFINITE_FAILURE
+  UNKNOWN_OUTCOME
+}
+
+model EmailSendAttempt {
+  id                String              @id @default(uuid()) @db.Uuid
+  purpose           EmailPurpose
+  outcome           EmailAttemptOutcome @default(RESERVED)
+  sanitizedCode     String?             @map("sanitized_code")
+  providerMessageId String?             @map("provider_message_id")
+  attemptedAt       DateTime            @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(6)
+
+  @@index([attemptedAt, purpose, outcome])
+  @@map("email_send_attempts")
+}
+
+enum ProcessorRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model ProcessorRun {
+  id                   String             @id @default(uuid()) @db.Uuid
+  status               ProcessorRunStatus @default(RUNNING)
+  claimed              Int                @default(0)
+  sent                 Int                @default(0)
+  failed               Int                @default(0)
+  recovered            Int                @default(0)
+  sanitizedFailureCode String?            @map("sanitized_failure_code")
+  startedAt            DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime?          @map("completed_at") @db.Timestamptz(6)
+
+  @@index([status, startedAt])
+  @@map("processor_runs")
 }
 ```
 
@@ -1064,6 +1224,42 @@ America/New_York
 The UI may collect local date/time, but the server must convert it to an absolute instant before persistence.
 
 Never store a timezone offset such as `+01:00` as the user's timezone because daylight-saving rules can change.
+
+## 8.4 Alert rule authority and invariants
+
+`scheduledFor` is the authoritative delivery instant used by the processor. `offsetMinutes`, when present, records the user-selected fixed-duration rule used to derive that instant.
+
+MVP semantics are intentionally fixed-duration:
+
+```text
+scheduledFor = dueAt - offsetMinutes minutes
+```
+
+Therefore, `1 day before` means exactly 1,440 minutes before the absolute `dueAt` instant. If the product later promises calendar-local behavior such as “the previous local day at 09:00,” introduce an explicit rule model instead of overloading `offsetMinutes`.
+
+Enforce these invariants in validation and, where Prisma cannot express them, in versioned PostgreSQL constraints:
+
+- `offsetMinutes` is a positive integer when present;
+- `scheduledFor < reminder.dueAt` for offset-based alerts;
+- duplicate `(reminderId, scheduledFor, channel)` alerts are rejected;
+- all timestamps are persisted as `timestamptz` absolute instants;
+- changing the user's profile timezone does not silently move existing absolute schedules;
+- changing `dueAt` recomputes enabled offset-based alerts in one transaction;
+- custom absolute alerts remain fixed unless the user explicitly edits them.
+
+Editing behavior:
+
+1. Preserve all `SENT` notifications as immutable history.
+2. Cancel obsolete `PENDING` or `FAILED` notifications.
+3. Do not mutate a notification leased as `PROCESSING`; mark its alert revision obsolete and let lease-guarded processing cancel it before send.
+4. Create new notification rows with new UUID/idempotency keys for the revised schedule.
+5. Increment an alert revision/version so the processor can verify that a claimed notification still belongs to the current schedule.
+
+Add an integer `scheduleVersion` to `ReminderAlert` and copy it to `Notification`. The processor sends only when notification and alert versions match. This makes edit/send races explicit rather than relying only on timestamp equality.
+
+## 8.5 Recipient-at-send policy
+
+Notifications do not snapshot the recipient email. At send time, the processor resolves the current `UserProfile.email` and requires a non-null `emailVerifiedAt`. An account email change therefore redirects future unsent reminders to the newly verified address. If the account is temporarily unverified, due notifications fail with a sanitized non-provider code and follow a bounded retry policy without calling Gmail.
 
 ---
 
@@ -1267,9 +1463,13 @@ GMAIL_SENDER_NAME=Remindly
 Optional controls:
 
 ```env
-GMAIL_REMINDER_DAILY_BUDGET=350
+GMAIL_TOTAL_DAILY_BUDGET=350
+GMAIL_AUTH_RESERVE=50
 GMAIL_REQUEST_TIMEOUT_MS=10000
+GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS=4000
 ```
+
+The Auth Hook total timeout includes token refresh and Gmail send; individual fetch timeouts must be shorter than this total. The reminder processor may use the longer request timeout because it is not inside Supabase's five-second Auth transaction.
 
 The sender budget leaves headroom below Gmail's standard account daily sending limit for:
 
@@ -1416,7 +1616,8 @@ Suggested mapping:
 | Google token endpoint `invalid_grant` | auth_revoked | No automatic rapid retry |
 | Gmail 400 due to invalid message | permanent | No |
 | Gmail 401 after token refresh | auth_revoked/config | No rapid retry |
-| Gmail 403 quota/rate reason | rate_limited | Yes, delayed |
+| Gmail 403 with documented quota/rate reason | rate_limited | Yes, delayed |
+| Gmail 403 permission/scope/policy reason | permanent or auth_revoked/config | No rapid retry |
 | Gmail 429 | rate_limited | Yes, exponential backoff |
 | Gmail 5xx | unknown/provider unavailable | Yes |
 | Network timeout after request was sent | unknown_outcome | Yes, duplicate possible |
@@ -1547,8 +1748,11 @@ user.email exists
 AND user.emailVerifiedAt exists
 AND reminder.status == ACTIVE
 AND alert.enabled == true
-AND notification schedule still matches alert schedule
+AND notification.scheduleVersion == alert.scheduleVersion
+AND notification.scheduledFor == alert.scheduledFor
 ```
+
+The atomic claim query should filter by current reminder/alert eligibility before leasing rows. The post-claim checks remain mandatory to close the race between claiming and sending.
 
 ---
 
@@ -1600,31 +1804,73 @@ Do not consume an attempt when the notification was not actually claimed/sent be
 
 ---
 
-## 16.4 Gmail daily budget
+## 16.4 Global Gmail sending budget
 
 Google documents a standard Gmail account daily send limit around 500 outgoing messages.
 
 Do not run Remindly at the absolute limit.
 
-Initial recommended application limit:
+Initial recommended total application limit:
 
 ```text
-350 reminder emails per rolling 24-hour window
+350 total Gmail API sends per rolling 24-hour window
 ```
 
-This leaves capacity for auth emails and operational uncertainty.
+This limit includes reminder emails and Supabase Auth emails. It leaves capacity for mailbox uncertainty and sends made outside Remindly.
 
-Before claiming a new batch:
+Create a provider-neutral `EmailSendAttempt` ledger, or equivalent durable aggregate, that records sanitized metadata for every Gmail send path:
 
 ```text
-count SENT reminder notifications over previous 24 hours
-remaining = budget - count
-claimLimit = min(PROCESSOR_BATCH_LIMIT, remaining)
+purpose: REMINDER | AUTH
+outcome: RESERVED | ACCEPTED | DEFINITE_FAILURE | UNKNOWN_OUTCOME
+attemptedAt
+providerMessageId (nullable)
+```
+
+Do not store recipient addresses, Auth tokens, subjects, or bodies in this budget ledger.
+
+Retain these operational rows for 30 days, then delete them with a versioned maintenance job. The retention window is long enough for quota/debugging review while keeping the ledger bounded and non-user-facing.
+
+Reserve capacity for Auth operations:
+
+```text
+TOTAL_DAILY_BUDGET = 350
+AUTH_RESERVE = 50
+REMINDER_CLAIM_CEILING = 300
+```
+
+Reminder processing stops claiming when either the reminder ceiling or total budget is exhausted. Auth sends may use the reserve but must fail closed when the total budget is exhausted. These are conservative application controls, not exact replicas of Gmail's mailbox quota calculation.
+
+Budget check and reservation must be atomic across reminder workers and Auth Hook requests. Use a short PostgreSQL transaction with one shared advisory-lock key, or an equivalent serialized budget primitive:
+
+```text
+begin transaction
+acquire Gmail-budget advisory transaction lock
+count RESERVED + ACCEPTED + UNKNOWN_OUTCOME attempts in rolling window
+validate total and per-purpose ceiling
+for reminder processing: claim due notification rows and insert one RESERVED EmailSendAttempt per claim in the same transaction
+for Auth: insert one RESERVED EmailSendAttempt
+commit
+call Gmail outside the transaction
+finalize each reservation as ACCEPTED, DEFINITE_FAILURE, or UNKNOWN_OUTCOME
+```
+
+Never hold a database transaction or advisory lock while making a network request. A recovery job converts stale `RESERVED` rows to `UNKNOWN_OUTCOME`, because a crashed function may have transmitted the request.
+
+Before claiming a new reminder batch:
+
+```text
+count all RESERVED, ACCEPTED, and UNKNOWN_OUTCOME Gmail attempts over previous 24 hours
+totalRemaining = TOTAL_DAILY_BUDGET - count
+reminderRemaining = REMINDER_CLAIM_CEILING - reminderCount
+claimLimit = min(PROCESSOR_BATCH_LIMIT, totalRemaining, reminderRemaining)
 ```
 
 If `remaining <= 0`, return a successful processor response with no claims and a sanitized quota state.
 
-This limit is a safety mechanism, not an exact mirror of Gmail's quota calculation.
+Count `RESERVED` and `UNKNOWN_OUTCOME` attempts against the budget because Gmail may have accepted them. Failed pre-request validation and connection failures proven to occur before request transmission may finalize as `DEFINITE_FAILURE` and stop consuming the application rolling budget.
+
+Add a circuit breaker that pauses Gmail calls after repeated `auth_revoked`, mailbox daily-limit, or configuration failures. The health state must be visible through protected operational diagnostics without exposing credentials or addresses.
 
 ---
 
@@ -1723,9 +1969,49 @@ select cron.schedule(
 
 Exact Vault/schema syntax should be checked against the active Supabase project when applied.
 
+`net.http_post` is asynchronous. A successful cron SQL execution proves only that PostgreSQL queued an HTTP request; it does not prove that Vercel returned 2xx or that notifications were processed.
+
 ---
 
-## 17.5 Remove GitHub scheduler
+## 17.5 Cron delivery observability
+
+The scheduled SQL must retain or expose the `pg_net` request ID. Operations must distinguish:
+
+```text
+cron job ran
+HTTP request was queued
+Vercel returned 2xx
+processor completed successfully
+```
+
+Add a `ProcessorRun` table, or equivalent durable heartbeat, written by the Vercel endpoint:
+
+```text
+runId
+startedAt
+completedAt
+status: RUNNING | SUCCEEDED | FAILED
+claimed
+sent
+failed
+recovered
+sanitizedFailureCode
+```
+
+Do not store recipient addresses, reminder content, request secrets, or provider payloads. Retain processor runs for 30 days through the same versioned operational cleanup job.
+
+Operational checks must detect:
+
+- no successful processor run for more than three expected intervals;
+- repeated non-2xx `pg_net` responses;
+- a run stuck in `RUNNING` beyond the processing lease;
+- repeated Gmail circuit-breaker activation.
+
+The deployment runbook must include SQL for inspecting cron history and `pg_net` responses, rotating the Vault scheduler secret, and disabling/unscheduling the job safely.
+
+---
+
+## 17.6 Remove GitHub scheduler
 
 After Supabase Cron is verified in production, remove or disable:
 
@@ -1788,6 +2074,26 @@ DIRECT_URL=postgresql://...pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 Update `prisma.config.ts` so migration commands use `DIRECT_URL` in deployed/serverless environments.
+
+Target configuration:
+
+```ts
+import 'dotenv/config';
+import { defineConfig, env } from 'prisma/config';
+
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
+  migrations: {
+    path: 'prisma/migrations',
+    seed: 'tsx prisma/seed.ts',
+  },
+  datasource: {
+    url: env('DIRECT_URL'),
+  },
+});
+```
+
+Application runtime code continues to initialize `PrismaPg` with `DATABASE_URL`. CI and migration jobs must define both variables and fail before deployment when either is missing.
 
 Do not run schema migrations through the transaction pooler.
 
@@ -1928,6 +2234,7 @@ NODE_ENV=production
 # Supabase browser/SSR auth
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
 
 # Prisma/Supabase PostgreSQL
 DATABASE_URL=postgresql://...:6543/postgres
@@ -1945,7 +2252,10 @@ GMAIL_CLIENT_SECRET=...
 GMAIL_REFRESH_TOKEN=...
 GMAIL_SENDER_EMAIL=remindly.notifications@gmail.com
 GMAIL_SENDER_NAME=Remindly
-GMAIL_REMINDER_DAILY_BUDGET=350
+GMAIL_TOTAL_DAILY_BUDGET=350
+GMAIL_AUTH_RESERVE=50
+GMAIL_REQUEST_TIMEOUT_MS=10000
+GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS=4000
 ```
 
 ---
@@ -1959,6 +2269,7 @@ The following must never reach the browser bundle:
 ```text
 DATABASE_URL
 DIRECT_URL
+SUPABASE_SECRET_KEY
 SCHEDULER_SECRET
 SUPABASE_SEND_EMAIL_HOOK_SECRET
 GMAIL_CLIENT_SECRET
@@ -1966,6 +2277,8 @@ GMAIL_REFRESH_TOKEN
 ```
 
 Vercel environment values are encrypted at rest, but project members with adequate access may be able to inspect/manage them. Restrict project access accordingly.
+
+`SUPABASE_SECRET_KEY` is used only by a server-only Supabase admin client for deleting the currently authenticated account and running explicit administrative repair operations. Never use that client for ordinary request data access, and never import it into Client Components, Proxy, or browser bundles. Legacy projects may expose an equivalent `service_role` key; use the current project-provided secret-key form when available.
 
 Changing Vercel environment variables requires a new deployment for the new values to apply to deployment functions.
 
@@ -2056,7 +2369,9 @@ Delete only after dependent code/tests have been migrated.
 ```text
 src/lib/supabase/client.ts
 src/lib/supabase/server.ts
-src/lib/supabase/middleware.ts
+src/lib/supabase/proxy.ts
+src/lib/supabase/admin.ts
+src/proxy.ts
 
 src/server/auth/require-user.ts
 
@@ -2082,7 +2397,6 @@ infra/supabase/002-cron-notification-processor.sql
 ## Refactor heavily
 
 ```text
-src/middleware.ts
 src/lib/env.ts
 src/server/notifications/processor.ts
 src/server/notifications/repository.ts
@@ -2146,6 +2460,24 @@ Email identity changes must go through Supabase Auth.
 
 ---
 
+## Account lifecycle
+
+```text
+DELETE /api/account
+```
+
+Requirements:
+
+- authenticated session whose `auth_time` is no older than ten minutes; otherwise require reauthentication;
+- same-origin/allow-listed `Origin` validation for the destructive cookie-authenticated request;
+- no client-supplied target user ID;
+- server deletes only the current Supabase Auth user;
+- database cascade removes owned application data;
+- response and logs contain no deleted profile data;
+- operation is explicitly destructive and is not silently retried by the client.
+
+---
+
 ## Internal processor
 
 ```text
@@ -2162,7 +2494,9 @@ Suggested response:
   "sent": 3,
   "failed": 1,
   "recovered": 0,
-  "budgetRemaining": 322
+  "totalBudgetRemaining": 322,
+  "reminderBudgetRemaining": 272,
+  "circuitState": "closed"
 }
 ```
 
@@ -2185,6 +2519,19 @@ On success:
 ```
 
 with HTTP 200.
+
+Failure contract:
+
+```json
+{
+  "error": {
+    "http_code": 503,
+    "message": "Authentication email delivery is temporarily unavailable"
+  }
+}
+```
+
+Use a stable, non-sensitive user-facing message. Internally log only `runId`, action type, duration, and sanitized failure code. Return 400 for malformed supported payloads, 401 for invalid webhook signatures, 429 for application budget/rate limits, and 503 for temporary provider failure. Do not expose Google or verification-library response bodies.
 
 ---
 
@@ -2240,13 +2587,39 @@ Use run IDs and sanitized error codes.
 
 Do not expose Supabase `service_role` / secret API keys to the browser.
 
+The server-only admin client using `SUPABASE_SECRET_KEY` is restricted to account deletion and explicit administrative repair paths. Ordinary user reads/writes continue through Prisma with authenticated ownership checks.
+
 ## SEC-011 — Open redirect prevention
 
 Allow-list auth confirmation/reset destinations.
 
 ## SEC-012 — Abuse protection
 
-Enable Supabase Auth rate limits and consider CAPTCHA/Turnstile if public signup abuse appears.
+Enable Supabase Auth rate limits before public signup. Add CAPTCHA/Turnstile when observed abuse or quota consumption crosses the documented operational threshold. The owner must be able to disable public signup without disabling login for existing users.
+
+## SEC-013 — Auth Hook deadline
+
+The Send Email Hook enforces a four-second application deadline, aborts outstanding provider requests, and never performs a blind retry after an ambiguous Gmail outcome.
+
+## SEC-014 — Schedule-version integrity
+
+A notification may be sent only when its schedule version and timestamp still match the enabled alert after claim and immediately before provider invocation.
+
+## SEC-015 — Minimal operational ledgers
+
+Email budget and processor-run tables contain only purpose, timestamps, aggregate counts, provider message ID where necessary, and sanitized status codes. They never contain recipient, subject, body, token, or reminder content.
+
+## SEC-016 — User deletion
+
+Deleting an Auth user removes the public profile and all owned application data through a tested database-level cascade or equivalent versioned trigger.
+
+## SEC-017 — Secret rotation
+
+The scheduler, Auth Hook, and Gmail OAuth secrets have documented rotation procedures. Rotation must not require committing a secret, returning it in an API response, or printing it in command output/logs.
+
+## SEC-018 — CSRF and origin validation
+
+Cookie-authenticated mutating route handlers must reject non-allow-listed `Origin` values. Server Actions remain subject to the installed Next.js 16 security model and still perform authorization inside the action. Internal scheduler and Auth Hook endpoints use their dedicated secret/signature contracts instead of browser cookies.
 
 ---
 
@@ -2263,10 +2636,12 @@ As of the date of this specification:
 Recommended operating target:
 
 ```text
-Reminder sends <= 350 / 24h
+All Remindly Gmail API attempts <= 350 / rolling 24h
+Reminder attempts <= 300 / rolling 24h
+Reserved Auth capacity = 50 / rolling 24h
 ```
 
-The remaining headroom covers Auth messages and avoids running at the documented ceiling.
+`UNKNOWN_OUTCOME` attempts count against these limits. This leaves additional headroom below the documented mailbox ceiling for quota uncertainty and sends outside Remindly.
 
 ### Scale trigger
 
@@ -2288,6 +2663,10 @@ Therefore:
 
 Re-check Google quota/pricing documentation before production launch and periodically afterward.
 
+OAuth production readiness may require a public home page, privacy policy, accurate app identity, authorized origins/redirects, and verification of a domain owned by the developer. A shared `*.vercel.app` hostname must not be assumed to satisfy every Google production requirement. Before relying on an unattended long-lived refresh token, complete a Google OAuth readiness checklist and determine whether a custom domain is required. Domain registration would break a literal `$0` guarantee.
+
+Gmail is not a transactional-email service and provides no Remindly-specific delivery SLA. Account throttling, anti-abuse enforcement, sender reputation, spam placement, or suspension can interrupt both reminder and Auth email delivery even when API quotas appear available.
+
 ## Supabase Free
 
 Current Free plan is suitable for development/small beta but has important limitations, including limited database size and potential pausing after low activity.
@@ -2295,6 +2674,8 @@ Current Free plan is suitable for development/small beta but has important limit
 A reminder application is time-sensitive. Test project-pausing behavior carefully and monitor Supabase announcements.
 
 For a truly reliability-critical reminder service, a paid non-pausing database tier may eventually be necessary.
+
+Verify before launch that the project has access to every required Free-plan feature, including Auth Send Email Hooks, Vault, Cron, `pg_net`, and the needed database connection modes. Record the observed limits and review date in the deployment runbook.
 
 ## Vercel Hobby
 
@@ -2308,6 +2689,16 @@ This architecture is appropriate for:
 - non-commercial beta.
 
 If Remindly becomes commercial or is used for financial gain, re-evaluate Vercel plan requirements.
+
+Hobby usage is capped. Reaching included limits can pause service rather than silently preserving reminder availability. The operational runbook must identify which Vercel usage metrics are checked and the threshold at which signup or reminder creation is temporarily disabled.
+
+## Cost objective statement
+
+The approved product statement is:
+
+> Remindly is designed to operate at `$0` for a low-volume, personal/non-commercial beta while Gmail, Supabase, and Vercel remain within their current free-tier limits and policies.
+
+Do not market or document the architecture as “free forever,” “100% guaranteed `$0`,” or suitable for reliability-critical reminders. Provider change is an expected operational path, not an exceptional redesign.
 
 ---
 
@@ -2408,11 +2799,28 @@ Add tests for:
 
 - valid Standard Webhooks signature accepted;
 - invalid signature rejected;
+- missing/expired webhook timestamp rejected;
+- `v1,whsec_` secret normalization;
 - malformed payload rejected;
 - signup template;
 - recovery template;
-- email-change field mapping;
+- secure and non-secure email-change field mapping;
+- invite and magic-link mapping when enabled;
+- action-specific `verifyOtp` type;
+- warm-token and cold-refresh paths complete within the four-second application deadline;
+- timeout aborts provider work and does not retry an ambiguous send;
 - unknown action behavior.
+
+### Gmail budget
+
+- reminder and Auth sends share the total budget;
+- reminder sends cannot consume the Auth reserve;
+- simultaneous Auth and reminder reservations cannot exceed either ceiling;
+- reminder claim and budget reservation commit or roll back together;
+- accepted and unknown outcomes consume budget;
+- stale reservations recover to unknown outcome;
+- proven pre-request failures do not consume budget;
+- circuit breaker opens and recovers according to policy.
 
 ---
 
@@ -2436,6 +2844,8 @@ Assert:
 - A cannot complete B;
 - A cannot renew B;
 - A cannot see B notification rows.
+- deleting A removes A's profile/application data without changing B's data.
+- reconciliation reports and repairs a missing profile without exposing email in logs.
 
 ### Notification processor
 
@@ -2454,6 +2864,9 @@ Test:
 - max attempts stops;
 - unverified/missing user email prevents send;
 - two simultaneous processor invocations do not double-claim.
+- editing an alert after claim but before send cancels the obsolete schedule version;
+- processor-run heartbeat reaches `SUCCEEDED` on success and `FAILED` on route failure;
+- Gmail budget exhaustion makes no claims and consumes no notification attempt.
 
 ### User preference timezone
 
@@ -2493,10 +2906,12 @@ If a full Gmail smoke test is required, make it an explicit manual test against 
 4. Enable Gmail API.
 5. Configure OAuth application.
 6. Request only `gmail.send`.
-7. Move production OAuth project out of Testing before relying on long-lived refresh token.
-8. Run local authorization bootstrap.
-9. Store refresh token securely.
-10. Perform one controlled Gmail API send test.
+7. Complete the production-readiness checklist: public home page, privacy policy, app identity, authorized origins/redirects, and owned-domain verification when required.
+8. Move production OAuth project out of Testing before relying on long-lived refresh token.
+9. Run local authorization bootstrap.
+10. Store refresh token securely.
+11. Perform one controlled Gmail API send test.
+12. Record the OAuth project state and review date without recording credentials.
 
 ---
 
@@ -2570,7 +2985,7 @@ SUPABASE_SEND_EMAIL_HOOK_SECRET=...
 
 Redeploy.
 
-Test signup and password recovery.
+Test signup, password recovery, and every enabled email action with exact token mapping. Measure warm-token and cold-refresh hook duration and require both to finish within Supabase's five-second deadline.
 
 ---
 
@@ -2587,7 +3002,7 @@ in Supabase Vault.
 
 Create the minute cron job.
 
-Verify cron invocation reaches Vercel and produces safe aggregate logs.
+Verify cron invocation reaches Vercel and produces safe aggregate logs. Inspect the `pg_net` response status and verify the matching `ProcessorRun` reaches `SUCCEEDED`; cron history alone is insufficient.
 
 ---
 
@@ -2602,20 +3017,29 @@ The refactor is considered deployment-ready only when all criteria below pass.
 - [ ] Unconfirmed user cannot complete protected login flow when confirmation is required.
 - [ ] Confirmation link returns to Vercel app and creates a valid session.
 - [ ] Password recovery email is sent through Gmail API.
+- [ ] Signup, recovery, invite, magic-link, and both email-change mappings pass action-specific contract tests for every enabled action.
+- [ ] Auth Hook succeeds within the five-second Supabase deadline on warm-token and cold-refresh paths.
+- [ ] Auth Hook timeout returns the documented sanitized Supabase error shape and does not retry an ambiguous send.
 - [ ] Logout invalidates/clears session correctly.
+- [ ] Account deletion removes the Auth user, profile, reminders, alerts, and notifications; non-PII aggregate operational ledgers follow their bounded retention policy.
 
 ## User isolation
 
 - [ ] User A cannot read User B's reminders.
 - [ ] User A cannot mutate User B's reminders.
 - [ ] User A cannot see User B's notification history.
+- [ ] Cookie-authenticated mutations reject non-allow-listed origins.
 
 ## Reminder behavior
 
 - [ ] Reminder can include date and time.
 - [ ] Multiple alert schedules are supported.
 - [ ] Alert times are converted correctly using user timezone.
+- [ ] Fixed-duration offset semantics are documented in the UI and tested across a daylight-saving transition.
 - [ ] Editing due time rebuilds only necessary future alerts/notifications.
+- [ ] Editing an alert during a `PROCESSING` lease cannot send an obsolete schedule version.
+- [ ] Duplicate same-time alerts are rejected.
+- [ ] Changing profile timezone does not silently move existing absolute schedules.
 - [ ] Completing reminder cancels unsent notifications.
 - [ ] Renewal history remains valid.
 
@@ -2623,25 +3047,37 @@ The refactor is considered deployment-ready only when all criteria below pass.
 
 - [ ] Dedicated sender OAuth refresh token works after redeploy/cold start.
 - [ ] Gmail provider stores returned Gmail message ID.
+- [ ] all reminder and Auth send attempts participate in the global Gmail budget.
+- [ ] `UNKNOWN_OUTCOME` attempts consume budget and document duplicate risk.
+- [ ] Auth reserve and reminder ceiling stop sends at their configured boundaries.
 - [ ] 429/5xx failures trigger bounded retries.
+- [ ] Gmail 403 reasons distinguish retryable quota failures from permanent permission/configuration failures.
 - [ ] revoked/invalid refresh token produces recognizable sanitized operational failure.
+- [ ] repeated Auth/quota/configuration failures open the Gmail circuit breaker.
 - [ ] MIME handles UTF-8 and HTML escaping.
 - [ ] no arbitrary sender or destination injection is possible.
 
 ## Scheduling
 
 - [ ] Supabase Cron calls processor every minute.
+- [ ] cron history proves the job ran and `pg_net` response inspection proves Vercel returned 2xx.
+- [ ] each invocation writes a sanitized `ProcessorRun` heartbeat.
+- [ ] missing success for three expected intervals is detectable operationally.
 - [ ] invalid scheduler secret returns 401.
+- [ ] scheduler secret rotation is tested without exposing the secret in SQL migrations or logs.
 - [ ] overlapping invocations cannot double-claim a notification.
 - [ ] missed invocation is caught up by the next run.
 
 ## Deployment
 
 - [ ] Vercel build succeeds.
+- [ ] Next.js 16 uses `src/proxy.ts`; legacy `src/middleware.ts` is removed.
 - [ ] production uses pooled Supabase DB URL.
 - [ ] migrations use correct non-transaction migration/session connection.
 - [ ] no local worker is required in production.
 - [ ] no GitHub scheduled workflow is required.
+- [ ] Google OAuth production-readiness requirements, authorized domains, homepage, and privacy policy are verified.
+- [ ] current Gmail, Supabase, and Vercel free-tier assumptions are recorded with review dates.
 
 ## Privacy/logging
 
@@ -2649,6 +3085,7 @@ The refactor is considered deployment-ready only when all criteria below pass.
 - [ ] no OAuth tokens in logs.
 - [ ] no auth tokens/token hashes in logs.
 - [ ] no reminder content in aggregate cron logs.
+- [ ] `EmailSendAttempt` and `ProcessorRun` contain no recipient, subject, body, Auth token, or reminder title.
 
 ---
 
@@ -2662,61 +3099,81 @@ Implement in this order to reduce breakage.
 - keep existing single-user behavior temporarily;
 - verify migrations/tests/build.
 
-## Step 2 — Add Supabase Auth
+## Step 2 — Add target schema behind existing behavior
+
+- create `user_profiles` and profile synchronization/deletion SQL;
+- add nullable ownership columns and backfill legacy rows;
+- add multi-alert, schedule-version, email-attempt, and processor-run models;
+- migrate existing schedules and verify row/count invariants;
+- keep public signup disabled;
+- keep legacy reads available until backfill verification passes.
+
+Gate: schema validation, migration rehearsal, rollback rehearsal, and existing tests pass.
+
+## Step 3 — Add Supabase Auth and Next.js 16 Proxy
 
 - install Supabase packages;
-- implement SSR clients;
-- add register/login/confirmation/recovery;
-- replace NextAuth middleware/session usage.
+- implement browser/server clients and `src/proxy.ts`;
+- add register/login/confirmation/recovery UI and routes;
+- implement server-only `requireUser()`;
+- enforce ownership in repositories/services/routes;
+- add IDOR and account-deletion tests;
+- keep registration feature-gated until Auth email delivery is ready.
 
-## Step 3 — Add Gmail provider
+Gate: two-user isolation passes across every API, server action, dashboard query, and settings operation.
 
-- implement OAuth refresh;
-- implement MIME;
-- implement Gmail send;
-- add provider tests;
-- retain fake provider for tests.
+## Step 4 — Add Gmail provider and global budget
 
-## Step 4 — Add Supabase Send Email Hook endpoint
+- implement OAuth refresh, MIME generation, and Gmail send;
+- implement error-reason classification and circuit breaker;
+- implement the global `EmailSendAttempt` budget with Auth reserve;
+- retain the fake provider for standard tests;
+- run one controlled manual Gmail smoke test.
 
-- implement Standard Webhooks verification;
-- send signup/recovery emails through Gmail;
-- enable hook in Supabase;
-- confirm full signup flow.
+Gate: provider/unit tests pass and no secret or PII appears in errors/logs.
 
-## Step 5 — Add user profile model
+## Step 5 — Add Supabase Send Email Hook endpoint
 
-- create `user_profiles`;
-- add Auth trigger;
-- synchronize verified email;
-- remove singleton notification email dependency.
+- implement exact Standard Webhooks secret normalization and raw-body verification;
+- implement the action/token mapping table as a discriminated union;
+- enforce the four-second application deadline;
+- test warm-token and cold-refresh paths;
+- enable the hook in Supabase;
+- confirm signup, recovery, and enabled email-change flows.
 
-## Step 6 — Enforce user ownership
+Gate: Auth Hook completes within Supabase's five-second limit and all enabled action fixtures pass.
 
-- add `userId` to reminders;
-- refactor repositories/services/routes;
-- add IDOR tests.
+## Step 6 — Enable public Supabase Auth and remove NextAuth dependency
 
-## Step 7 — Introduce multi-alert model
+- enable registration only after Step 5 passes in the deployed environment;
+- verify profile creation/update/delete triggers;
+- switch protected flows fully to Supabase sessions;
+- remove owner-only auth from active request paths, but retain rollback deployment.
 
-- add `dueAt`;
-- add `ReminderAlert`;
-- migrate notification relation;
-- update UI/validation.
+## Step 7 — Enable multi-alert UI and schedule-version processing
 
-## Step 8 — Switch notification processor to Gmail
+- expose `dueAt` and multiple alert rules in validation/UI;
+- implement fixed-duration offset semantics;
+- rebuild future notifications transactionally on edits;
+- preserve sent history and cancel obsolete schedule versions;
+- test daylight-saving boundaries and edit/send races.
 
-- recipient becomes reminder owner's verified email;
-- remove Resend provider;
-- adapt error semantics;
-- add Gmail budget guard.
+## Step 8 — Switch reminder delivery to Gmail
 
-## Step 9 — Add Supabase Cron
+- resolve recipient from the current verified profile at send time;
+- apply schedule-version and status checks before and after claim;
+- enable Gmail behind `EMAIL_PROVIDER=gmail`;
+- monitor the global budget, circuit breaker, and sanitized failures;
+- retain Resend rollback until the Gmail path is stable.
 
-- enable extensions;
-- store secret in Vault;
-- run every minute;
-- verify overlap/recovery behavior.
+## Step 9 — Add Supabase Cron and processor heartbeat
+
+- enable `pg_cron` and `pg_net`;
+- store URL/secret in Vault;
+- schedule every minute;
+- persist `ProcessorRun` state;
+- inspect `pg_net` response status rather than relying only on cron success;
+- verify overlap, catch-up, stale-run, secret-rotation, and unschedule behavior.
 
 ## Step 10 — Remove legacy single-owner infrastructure
 
@@ -2733,7 +3190,9 @@ NextAuth credentials code
 GitHub notification workflow
 ```
 
-## Step 11 — Full regression suite
+Remove Resend only after the rollback observation window defined in Section 35 has passed.
+
+## Step 11 — Full regression and production-readiness suite
 
 Run:
 
@@ -2746,6 +3205,8 @@ npm run test:e2e
 ```
 
 Then complete production acceptance checklist.
+
+Do not enable unrestricted public signup until the complete authentication, Gmail budget, abuse-control, and free-tier readiness checks pass in Production.
 
 ---
 
@@ -2764,7 +3225,11 @@ For Gmail integration rollout:
 2. test controlled Gmail sends;
 3. switch reminder processor to Gmail;
 4. monitor sanitized failure codes;
-5. remove Resend only after Gmail path is stable.
+5. keep Resend credentials/code available for a minimum seven-day observation window;
+6. during that window, successfully exercise signup, recovery, reminder delivery, token refresh after cold start, quota/circuit-breaker simulation, and cron catch-up;
+7. remove Resend only after the observation checklist passes.
+
+Rollback does not undo already-sent Gmail messages or remove possible duplicates from ambiguous outcomes. A database rollback must never restore `PENDING` status to notifications already recorded as `SENT` by the newer deployment.
 
 Temporary provider switch:
 
@@ -2819,6 +3284,36 @@ could be reintroduced later without changing reminder business logic.
 **Impact:** Supabase signup may fail.  
 **Mitigation:** keep trigger minimal; integration-test; version SQL; avoid unrelated business logic inside trigger.
 
+## Risk 8 — Auth Hook exceeds five seconds
+
+**Impact:** Supabase reports signup/recovery failure even if Gmail later accepts the message.
+
+**Mitigation:** four-second application deadline, warm/cold latency tests, no in-request retry after ambiguous send, clear user retry guidance.
+
+## Risk 9 — Cron queued but processor failed
+
+**Impact:** PostgreSQL records a successful cron job while reminders remain unsent.
+
+**Mitigation:** inspect `pg_net` responses, persist `ProcessorRun` heartbeats, detect three missed success intervals.
+
+## Risk 10 — OAuth production/domain requirement creates cost
+
+**Impact:** A custom verified domain or additional compliance work may be required, invalidating a literal `$0` claim.
+
+**Mitigation:** complete Google OAuth production-readiness review before launch; treat `$0` as a constrained target; do not promise free-forever operation.
+
+## Risk 11 — Public Auth abuse consumes Gmail quota
+
+**Impact:** Automated signup/recovery abuse exhausts the shared Gmail budget and blocks real reminders or account recovery.
+
+**Mitigation:** Supabase rate limits, CAPTCHA/Turnstile when needed, global send ledger, Auth reserve, per-purpose circuit breaker, ability to disable public signup.
+
+## Risk 12 — Schedule edit races with a leased notification
+
+**Impact:** An obsolete reminder time may be emailed after the user edits the alert.
+
+**Mitigation:** schedule versions copied to notifications, eligibility checked before and after claim, obsolete versions cancelled without mutating sent history.
+
 ---
 
 # 37. Future Migration Path to a Transactional Email Provider
@@ -2866,6 +3361,8 @@ singleton notification email
 Resend-specific runtime code
 local notification worker in production
 manual-only GitHub workflow
+legacy `src/middleware.ts`
+untracked Gmail send paths outside the global budget
 ```
 
 and the production chain is:
@@ -2884,14 +3381,58 @@ Supabase Cron
     +--> Vercel notification processor
              |
              +--> user-owned ReminderAlert
+             +--> schedule-version guard
              +--> durable Notification ledger
              +--> verified user email
              +--> Gmail API
+                     |
+                     +--> EmailSendAttempt budget ledger
 ```
+
+Operations can prove the difference between a cron job being scheduled, an HTTP request being queued, and a processor run succeeding through `pg_net` response inspection plus `ProcessorRun` heartbeats.
 
 This architecture directly supports the intended Remindly product behavior:
 
 > A user signs up with an email address, confirms ownership of that address, creates reminders, chooses one or more alert times, and Remindly automatically sends those reminders to that verified email address without requiring the user to connect a Gmail account or requiring Remindly to own a custom email domain.
+
+The final clause is a product-email requirement, not an OAuth-domain guarantee. Google production-readiness requirements may still require Remindly to own a web domain; if so, the deployment no longer satisfies a literal `$0` promise.
+
+---
+
+# 38.1. Implementation checkpoint — Supabase foundation
+
+The first implementation slice is complete on branch `refacto`.
+
+Migration applied:
+
+```text
+20260830213000_refactor_foundation
+```
+
+This slice deliberately preserves the current application while adding the database structures needed for the target architecture:
+
+```text
+UserProfile                    present; not yet synchronized with auth.users
+Reminder.userId                present and nullable during backfill
+ReminderAlert                  present
+Notification.reminderAlertId  present and nullable during transition
+Notification.scheduleVersion   present and nullable during transition
+EmailSendAttempt               present
+ProcessorRun                   present
+Settings                       retained for legacy single-owner behavior
+legacy reminder fields         retained for compatibility
+legacy notification fields     retained for compatibility
+```
+
+The following target behaviors are not enabled by this migration and must be implemented in the next slices:
+
+1. Create Supabase browser, server, and admin clients and make Supabase Auth the identity authority.
+2. Add the hosted Supabase SQL trigger that creates `public.user_profiles` from `auth.users`, plus the selected deletion policy and a repair/reconciliation job. This SQL is intentionally separate from the Prisma migration because the local PostgreSQL test database does not contain Supabase's managed `auth.users` schema.
+3. Replace `requireOwner` with authenticated `requireUser` ownership checks, add account deletion protection, and move Next.js 16 request protection to `src/proxy.ts` while keeping authorization in the data-access/API layer.
+4. Backfill `Reminder.userId`, make ownership non-null after the backfill gate passes, and migrate the existing one-alert model to `ReminderAlert` and versioned notifications.
+5. Implement Gmail provider delivery, Auth Hook delivery, the shared budget reservation, processor state machine, and Supabase Cron/`pg_net` observability.
+
+The migration is additive and was rehearsed against the isolated test database. Existing singleton settings and legacy reminder/notification rows remain readable. No Supabase Auth project, Gmail account, Vercel deployment, or paid service is required for this foundation slice.
 
 ---
 
@@ -2918,6 +3459,8 @@ The following official documentation was used to validate this specification on 
 
 6. Google OAuth production readiness / app state  
    https://developers.google.com/identity/protocols/oauth2/production-readiness/overview
+
+6a. [Google OAuth production policy compliance](https://developers.google.com/identity/protocols/oauth2/production-readiness/policy-compliance)
 
 7. Gmail API usage limits and quotas  
    https://developers.google.com/workspace/gmail/api/reference/quota
@@ -2961,7 +3504,13 @@ The following official documentation was used to validate this specification on 
     https://supabase.com/docs/guides/database/connecting-to-postgres
 
 20. Supabase Free project pausing  
-    https://supabase.com/docs/guides/platform/free-project-pausing
+   https://supabase.com/docs/guides/platform/free-project-pausing
+
+## Next.js
+
+20a. [Next.js 16 Proxy convention](https://nextjs.org/docs/app/getting-started/proxy)
+
+20b. [Next.js authentication and authorization guidance](https://nextjs.org/docs/app/guides/authentication)
 
 ## Vercel
 

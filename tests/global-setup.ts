@@ -12,7 +12,11 @@ function deployMigrations(testDatabaseUrl: string): void {
     [path.resolve(process.cwd(), 'node_modules/prisma/build/index.js'), 'migrate', 'deploy'],
     {
       cwd: process.cwd(),
-      env: { ...process.env, DATABASE_URL: testDatabaseUrl },
+      env: {
+        ...process.env,
+        DATABASE_URL: testDatabaseUrl,
+        DIRECT_URL: testDatabaseUrl,
+      },
       stdio: 'inherit',
     },
   );

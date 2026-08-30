@@ -16,12 +16,12 @@ import { fileURLToPath } from 'node:url'
 globalThis['__dirname'] = path.dirname(fileURLToPath(import.meta.url))
 
 import * as runtime from "@prisma/client/runtime/client"
-import * as $Enums from "./enums"
-import * as $Class from "./internal/class"
-import * as Prisma from "./internal/prismaNamespace"
+import * as $Enums from "./enums.ts"
+import * as $Class from "./internal/class.ts"
+import * as Prisma from "./internal/prismaNamespace.ts"
 
-export * as $Enums from './enums'
-export * from "./enums"
+export * as $Enums from './enums.ts'
+export * from "./enums.ts"
 /**
  * ## Prisma Client
  * 
@@ -31,8 +31,8 @@ export * from "./enums"
  * const prisma = new PrismaClient({
  *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
  * })
- * // Fetch zero or more Reminders
- * const reminders = await prisma.reminder.findMany()
+ * // Fetch zero or more UserProfiles
+ * const userProfiles = await prisma.userProfile.findMany()
  * ```
  * 
  * Read more in our [docs](https://pris.ly/d/client).
@@ -42,15 +42,35 @@ export type PrismaClient<LogOpts extends Prisma.LogLevel = never, OmitOpts exten
 export { Prisma }
 
 /**
+ * Model UserProfile
+ * 
+ */
+export type UserProfile = Prisma.UserProfileModel
+/**
  * Model Reminder
  * 
  */
 export type Reminder = Prisma.ReminderModel
 /**
+ * Model ReminderAlert
+ * 
+ */
+export type ReminderAlert = Prisma.ReminderAlertModel
+/**
  * Model Notification
  * 
  */
 export type Notification = Prisma.NotificationModel
+/**
+ * Model EmailSendAttempt
+ * 
+ */
+export type EmailSendAttempt = Prisma.EmailSendAttemptModel
+/**
+ * Model ProcessorRun
+ * 
+ */
+export type ProcessorRun = Prisma.ProcessorRunModel
 /**
  * Model Settings
  * 

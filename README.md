@@ -17,7 +17,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and replace every placeholder. Prisma CLI loads `.env` through `prisma.config.ts`, and Next.js also loads it for local development. Generate secrets locally:
+2. Copy `.env.example` to `.env` and replace every placeholder. `DATABASE_URL` is the runtime connection; `DIRECT_URL` is the direct/session connection used by Prisma CLI migrations. Prisma CLI loads `.env` through `prisma.config.ts`, and Next.js also loads it for local development. Generate secrets locally:
 
    ```powershell
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -43,6 +43,8 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npx prisma migrate deploy
    npx prisma db seed
    ```
+
+   The current `refacto` foundation migration is additive. It adds the Supabase-compatible profile, alert, schedule-version, and operational-ledger tables while the existing single-owner runtime remains active. The hosted Supabase Auth trigger and ownership backfill are intentionally separate follow-up migrations.
 
 5. Start Next.js and the 30-second local notification worker:
 
@@ -75,6 +77,8 @@ npm test
 ```
 
 Vitest rejects non-PostgreSQL URLs, non-local implicit derivation, unsafe or ambiguous database names, and any final database name that does not end in `_test`. This applies to both `npm test` and direct `npx vitest` commands.
+
+When running Prisma commands after upgrading an older local `.env`, add `DIRECT_URL` with the same local PostgreSQL URL used by `DATABASE_URL`. For Supabase, `DATABASE_URL` should be the pooled runtime URL and `DIRECT_URL` should be the direct/session URL used by Prisma migrations.
 
 The end-to-end suite starts its own Next.js development server and reads its database from `E2E_DATABASE_URL`, falling back to `DATABASE_URL`:
 
@@ -122,4 +126,4 @@ The local worker attempts due processing every 30 seconds, so Remindly normally 
 
 ## Production environment
 
-Deploy the Next.js application as one service with managed PostgreSQL. Required server-only values are documented in `.env.example`. Keep `AUTH_SECRET`, `OWNER_PASSWORD_HASH`, `SCHEDULER_SECRET`, `RESEND_API_KEY`, and the database URL in the deployment platform's encrypted secret store. Set both `APP_URL` and `NEXTAUTH_URL` to the canonical HTTPS origin.
+Deploy the Next.js application as one service with managed PostgreSQL. Required server-only values are documented in `.env.example`. Keep `AUTH_SECRET`, `OWNER_PASSWORD_HASH`, `SCHEDULER_SECRET`, `RESEND_API_KEY`, `DATABASE_URL`, and `DIRECT_URL` in the deployment platform's encrypted secret store. For Supabase, use the pooled connection for `DATABASE_URL` and the direct/session connection for `DIRECT_URL`. Set both `APP_URL` and `NEXTAUTH_URL` to the canonical HTTPS origin.

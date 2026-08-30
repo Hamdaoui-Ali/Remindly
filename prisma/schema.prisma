@@ -25,6 +25,38 @@ enum NotificationChannel {
   EMAIL
 }
 
+enum EmailPurpose {
+  REMINDER
+  AUTH
+}
+
+enum EmailAttemptOutcome {
+  RESERVED
+  ACCEPTED
+  DEFINITE_FAILURE
+  UNKNOWN_OUTCOME
+}
+
+enum ProcessorRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model UserProfile {
+  id               String    @id @db.Uuid
+  email            String    @unique
+  emailVerifiedAt  DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  timezone         String    @default("UTC")
+  defaultAlertTime String    @default("09:00") @map("default_alert_time")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reminders Reminder[]
+
+  @@map("user_profiles")
+}
+
 model Reminder {
   id               String         @id @default(uuid()) @db.Uuid
   name             String
@@ -35,51 +67,108 @@ model Reminder {
   status           ReminderStatus @default(ACTIVE)
   parentReminderId String?        @map("parent_reminder_id") @db.Uuid
   completedAt      DateTime?      @map("completed_at") @db.Timestamptz(6)
+  userId           String?        @map("user_id") @db.Uuid
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  parent        Reminder?      @relation("ReminderRenewals", fields: [parentReminderId], references: [id], onDelete: Restrict)
-  renewals      Reminder[]     @relation("ReminderRenewals")
+  parent        Reminder?       @relation("ReminderRenewals", fields: [parentReminderId], references: [id], onDelete: Restrict)
+  renewals      Reminder[]      @relation("ReminderRenewals")
   notifications Notification[]
+  userProfile   UserProfile?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alerts        ReminderAlert[]
 
   @@index([status, endDate])
   @@index([status, alertAt])
   @@index([parentReminderId])
+  @@index([userId])
   @@map("reminders")
+}
+
+model ReminderAlert {
+  id              String              @id @default(uuid()) @db.Uuid
+  reminderId      String              @map("reminder_id") @db.Uuid
+  scheduledFor    DateTime            @map("scheduled_for") @db.Timestamptz(6)
+  offsetMinutes   Int?                @map("offset_minutes")
+  scheduleVersion Int                 @default(1) @map("schedule_version")
+  channel         NotificationChannel @default(EMAIL)
+  enabled         Boolean             @default(true)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reminder      Reminder       @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@unique([reminderId, scheduledFor, channel])
+  @@index([reminderId, scheduledFor])
+  @@map("reminder_alerts")
 }
 
 model Notification {
   id                  String              @id @default(uuid()) @db.Uuid
   reminderId          String              @map("reminder_id") @db.Uuid
+  reminderAlertId     String?             @map("reminder_alert_id") @db.Uuid
   scheduledFor        DateTime            @map("scheduled_for") @db.Timestamptz(6)
+  scheduleVersion     Int?                @map("schedule_version")
   channel             NotificationChannel @default(EMAIL)
-  status              NotificationStatus @default(PENDING)
+  status              NotificationStatus  @default(PENDING)
   attemptCount        Int                 @default(0) @map("attempt_count")
   nextAttemptAt       DateTime?           @map("next_attempt_at") @db.Timestamptz(6)
   processingStartedAt DateTime?           @map("processing_started_at") @db.Timestamptz(6)
   idempotencyKey      String              @unique @map("idempotency_key")
   providerMessageId   String?             @map("provider_message_id")
   lastError           String?             @map("last_error")
+  lastErrorCode       String?             @map("last_error_code")
   sentAt              DateTime?           @map("sent_at") @db.Timestamptz(6)
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  reminder Reminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  reminder Reminder       @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  alert    ReminderAlert? @relation(fields: [reminderAlertId], references: [id], onDelete: Cascade)
 
   @@unique([reminderId, scheduledFor, channel])
+  @@unique([reminderAlertId, scheduleVersion, channel])
   @@index([status, nextAttemptAt, scheduledFor])
+  @@index([reminderAlertId, scheduleVersion])
   @@map("notifications")
+}
+
+model EmailSendAttempt {
+  id                String              @id @default(uuid()) @db.Uuid
+  purpose           EmailPurpose
+  outcome           EmailAttemptOutcome @default(RESERVED)
+  sanitizedCode     String?             @map("sanitized_code")
+  providerMessageId String?             @map("provider_message_id")
+  attemptedAt       DateTime            @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(6)
+
+  @@index([attemptedAt, purpose, outcome])
+  @@map("email_send_attempts")
+}
+
+model ProcessorRun {
+  id                   String             @id @default(uuid()) @db.Uuid
+  status               ProcessorRunStatus @default(RUNNING)
+  claimed              Int                @default(0)
+  sent                 Int                @default(0)
+  failed               Int                @default(0)
+  recovered            Int                @default(0)
+  sanitizedFailureCode String?            @map("sanitized_failure_code")
+  startedAt            DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime?          @map("completed_at") @db.Timestamptz(6)
+
+  @@index([status, startedAt])
+  @@map("processor_runs")
 }
 
 model Settings {
   /// The PostgreSQL CHECK constraint in migration 20260819020000_enforce_settings_singleton
   /// restricts this primary key to `singleton`; Prisma schema syntax cannot express CHECK constraints.
-  id               String   @id
-  notificationEmail String  @map("notification_email")
-  timezone         String
-  defaultAlertTime String   @map("default_alert_time")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String   @id
+  notificationEmail String   @map("notification_email")
+  timezone          String
+  defaultAlertTime  String   @map("default_alert_time")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("settings")
 }

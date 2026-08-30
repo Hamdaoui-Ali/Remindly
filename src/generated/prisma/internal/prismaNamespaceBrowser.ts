@@ -17,8 +17,8 @@
 
 import * as runtime from "@prisma/client/runtime/index-browser"
 
-export type * from '../models'
-export type * from './prismaNamespace'
+export type * from '../models.ts'
+export type * from './prismaNamespace.ts'
 
 export const Decimal = runtime.Decimal
 
@@ -51,8 +51,12 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
+  UserProfile: 'UserProfile',
   Reminder: 'Reminder',
+  ReminderAlert: 'ReminderAlert',
   Notification: 'Notification',
+  EmailSendAttempt: 'EmailSendAttempt',
+  ProcessorRun: 'ProcessorRun',
   Settings: 'Settings'
 } as const
 
@@ -72,6 +76,19 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
+export const UserProfileScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  emailVerifiedAt: 'emailVerifiedAt',
+  timezone: 'timezone',
+  defaultAlertTime: 'defaultAlertTime',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UserProfileScalarFieldEnum = (typeof UserProfileScalarFieldEnum)[keyof typeof UserProfileScalarFieldEnum]
+
+
 export const ReminderScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -82,6 +99,7 @@ export const ReminderScalarFieldEnum = {
   status: 'status',
   parentReminderId: 'parentReminderId',
   completedAt: 'completedAt',
+  userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -89,10 +107,27 @@ export const ReminderScalarFieldEnum = {
 export type ReminderScalarFieldEnum = (typeof ReminderScalarFieldEnum)[keyof typeof ReminderScalarFieldEnum]
 
 
-export const NotificationScalarFieldEnum = {
+export const ReminderAlertScalarFieldEnum = {
   id: 'id',
   reminderId: 'reminderId',
   scheduledFor: 'scheduledFor',
+  offsetMinutes: 'offsetMinutes',
+  scheduleVersion: 'scheduleVersion',
+  channel: 'channel',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ReminderAlertScalarFieldEnum = (typeof ReminderAlertScalarFieldEnum)[keyof typeof ReminderAlertScalarFieldEnum]
+
+
+export const NotificationScalarFieldEnum = {
+  id: 'id',
+  reminderId: 'reminderId',
+  reminderAlertId: 'reminderAlertId',
+  scheduledFor: 'scheduledFor',
+  scheduleVersion: 'scheduleVersion',
   channel: 'channel',
   status: 'status',
   attemptCount: 'attemptCount',
@@ -101,12 +136,41 @@ export const NotificationScalarFieldEnum = {
   idempotencyKey: 'idempotencyKey',
   providerMessageId: 'providerMessageId',
   lastError: 'lastError',
+  lastErrorCode: 'lastErrorCode',
   sentAt: 'sentAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[keyof typeof NotificationScalarFieldEnum]
+
+
+export const EmailSendAttemptScalarFieldEnum = {
+  id: 'id',
+  purpose: 'purpose',
+  outcome: 'outcome',
+  sanitizedCode: 'sanitizedCode',
+  providerMessageId: 'providerMessageId',
+  attemptedAt: 'attemptedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type EmailSendAttemptScalarFieldEnum = (typeof EmailSendAttemptScalarFieldEnum)[keyof typeof EmailSendAttemptScalarFieldEnum]
+
+
+export const ProcessorRunScalarFieldEnum = {
+  id: 'id',
+  status: 'status',
+  claimed: 'claimed',
+  sent: 'sent',
+  failed: 'failed',
+  recovered: 'recovered',
+  sanitizedFailureCode: 'sanitizedFailureCode',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type ProcessorRunScalarFieldEnum = (typeof ProcessorRunScalarFieldEnum)[keyof typeof ProcessorRunScalarFieldEnum]
 
 
 export const SettingsScalarFieldEnum = {

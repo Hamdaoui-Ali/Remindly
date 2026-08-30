@@ -34,3 +34,30 @@ export const NotificationChannel = {
 } as const
 
 export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel]
+
+
+export const EmailPurpose = {
+  REMINDER: 'REMINDER',
+  AUTH: 'AUTH'
+} as const
+
+export type EmailPurpose = (typeof EmailPurpose)[keyof typeof EmailPurpose]
+
+
+export const EmailAttemptOutcome = {
+  RESERVED: 'RESERVED',
+  ACCEPTED: 'ACCEPTED',
+  DEFINITE_FAILURE: 'DEFINITE_FAILURE',
+  UNKNOWN_OUTCOME: 'UNKNOWN_OUTCOME'
+} as const
+
+export type EmailAttemptOutcome = (typeof EmailAttemptOutcome)[keyof typeof EmailAttemptOutcome]
+
+
+export const ProcessorRunStatus = {
+  RUNNING: 'RUNNING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED'
+} as const
+
+export type ProcessorRunStatus = (typeof ProcessorRunStatus)[keyof typeof ProcessorRunStatus]
