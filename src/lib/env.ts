@@ -5,6 +5,12 @@ const authEnvSchema = z.object({
   OWNER_EMAIL: z.string().email(),
 });
 
+const supabaseEnvSchema = z.object({
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+  SUPABASE_SECRET_KEY: z.string().min(1),
+});
+
 const envSchema = authEnvSchema.extend({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
@@ -19,6 +25,15 @@ const envSchema = authEnvSchema.extend({
 
 export type ServerEnv = z.infer<typeof envSchema>;
 export type AuthEnv = z.infer<typeof authEnvSchema>;
+export type SupabaseEnv = z.infer<typeof supabaseEnvSchema>;
+
+export function parseSupabaseEnv(input: Record<string, unknown>): SupabaseEnv {
+  return supabaseEnvSchema.parse(input);
+}
+
+export function supabaseEnv(): SupabaseEnv {
+  return parseSupabaseEnv(process.env);
+}
 
 export function parseAuthEnv(input: Record<string, unknown>): AuthEnv {
   const env = authEnvSchema.parse(input);

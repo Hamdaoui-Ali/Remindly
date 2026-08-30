@@ -28,6 +28,8 @@
     "@next/env": "16.3.1",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
