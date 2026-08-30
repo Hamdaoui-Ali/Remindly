@@ -996,6 +996,7 @@ export type UserProfileScalarFieldEnum = (typeof UserProfileScalarFieldEnum)[key
 export const ReminderScalarFieldEnum = {
   id: 'id',
   name: 'name',
+  dueAt: 'dueAt',
   endDate: 'endDate',
   alertLeadDays: 'alertLeadDays',
   alertTime: 'alertTime',
