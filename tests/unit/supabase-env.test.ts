@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSupabaseEnv } from '@/lib/env';
+import { parseSupabaseEnv, parseSupabasePublicEnv } from '@/lib/env';
 
 describe('parseSupabaseEnv', () => {
   const validEnv = {
@@ -10,6 +10,12 @@ describe('parseSupabaseEnv', () => {
 
   it('accepts the public and server-only Supabase credentials', () => {
     expect(parseSupabaseEnv(validEnv)).toEqual(validEnv);
+  });
+
+  it('accepts public credentials without requiring the server-only secret', () => {
+    const { SUPABASE_SECRET_KEY: _secretKey, ...publicEnv } = validEnv;
+
+    expect(parseSupabasePublicEnv(publicEnv)).toEqual(publicEnv);
   });
 
   it('rejects a missing server-only secret key', () => {

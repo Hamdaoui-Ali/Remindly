@@ -1,6 +1,6 @@
 'use client';
 
-import { signIn } from 'next-auth/react';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 const GENERIC_LOGIN_ERROR = 'Unable to sign in with those credentials.';
 
@@ -36,14 +36,10 @@ export async function loginAction(
   }
 
   try {
-    const result = await signIn('credentials', {
-      email,
-      password,
-      callbackUrl: '/',
-      redirect: false,
-    });
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (!result?.ok) {
+    if (error) {
       return {
         error: GENERIC_LOGIN_ERROR,
         field: 'email',
@@ -51,7 +47,7 @@ export async function loginAction(
       };
     }
 
-    window.location.assign(result.url ?? '/');
+    window.location.assign('/');
     return { error: null, field: null, attempt: previousState.attempt };
   } catch {
     return {
