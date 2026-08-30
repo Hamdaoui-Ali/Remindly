@@ -13,20 +13,40 @@
  * 🟢 You can import this file directly.
  */
 
-import * as Prisma from './internal/prismaNamespaceBrowser'
+import * as Prisma from './internal/prismaNamespaceBrowser.ts'
 export { Prisma }
-export * as $Enums from './enums'
-export * from './enums';
+export * as $Enums from './enums.ts'
+export * from './enums.ts';
+/**
+ * Model UserProfile
+ * 
+ */
+export type UserProfile = Prisma.UserProfileModel
 /**
  * Model Reminder
  * 
  */
 export type Reminder = Prisma.ReminderModel
 /**
+ * Model ReminderAlert
+ * 
+ */
+export type ReminderAlert = Prisma.ReminderAlertModel
+/**
  * Model Notification
  * 
  */
 export type Notification = Prisma.NotificationModel
+/**
+ * Model EmailSendAttempt
+ * 
+ */
+export type EmailSendAttempt = Prisma.EmailSendAttemptModel
+/**
+ * Model ProcessorRun
+ * 
+ */
+export type ProcessorRun = Prisma.ProcessorRunModel
 /**
  * Model Settings
  * 

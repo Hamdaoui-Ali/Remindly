@@ -16,10 +16,10 @@
  */
 
 import * as runtime from "@prisma/client/runtime/client"
-import type * as Prisma from "../models"
-import { type PrismaClient } from "./class"
+import type * as Prisma from "../models.ts"
+import { type PrismaClient } from "./class.ts"
 
-export type * from '../models'
+export type * from '../models.ts'
 
 export type DMMF = typeof runtime.DMMF
 
@@ -397,8 +397,12 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 
 export const ModelName = {
+  UserProfile: 'UserProfile',
   Reminder: 'Reminder',
+  ReminderAlert: 'ReminderAlert',
   Notification: 'Notification',
+  EmailSendAttempt: 'EmailSendAttempt',
+  ProcessorRun: 'ProcessorRun',
   Settings: 'Settings'
 } as const
 
@@ -415,10 +419,84 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "reminder" | "notification" | "settings"
+    modelProps: "userProfile" | "reminder" | "reminderAlert" | "notification" | "emailSendAttempt" | "processorRun" | "settings"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
+    UserProfile: {
+      payload: Prisma.$UserProfilePayload<ExtArgs>
+      fields: Prisma.UserProfileFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UserProfileFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UserProfileFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        findFirst: {
+          args: Prisma.UserProfileFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UserProfileFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        findMany: {
+          args: Prisma.UserProfileFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>[]
+        }
+        create: {
+          args: Prisma.UserProfileCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        createMany: {
+          args: Prisma.UserProfileCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UserProfileCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>[]
+        }
+        delete: {
+          args: Prisma.UserProfileDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        update: {
+          args: Prisma.UserProfileUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        deleteMany: {
+          args: Prisma.UserProfileDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UserProfileUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UserProfileUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>[]
+        }
+        upsert: {
+          args: Prisma.UserProfileUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        aggregate: {
+          args: Prisma.UserProfileAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUserProfile>
+        }
+        groupBy: {
+          args: Prisma.UserProfileGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserProfileGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UserProfileCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserProfileCountAggregateOutputType> | number
+        }
+      }
+    }
     Reminder: {
       payload: Prisma.$ReminderPayload<ExtArgs>
       fields: Prisma.ReminderFieldRefs
@@ -493,6 +571,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ReminderAlert: {
+      payload: Prisma.$ReminderAlertPayload<ExtArgs>
+      fields: Prisma.ReminderAlertFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ReminderAlertFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ReminderAlertFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>
+        }
+        findFirst: {
+          args: Prisma.ReminderAlertFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ReminderAlertFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>
+        }
+        findMany: {
+          args: Prisma.ReminderAlertFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>[]
+        }
+        create: {
+          args: Prisma.ReminderAlertCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>
+        }
+        createMany: {
+          args: Prisma.ReminderAlertCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ReminderAlertCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>[]
+        }
+        delete: {
+          args: Prisma.ReminderAlertDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>
+        }
+        update: {
+          args: Prisma.ReminderAlertUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>
+        }
+        deleteMany: {
+          args: Prisma.ReminderAlertDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ReminderAlertUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ReminderAlertUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>[]
+        }
+        upsert: {
+          args: Prisma.ReminderAlertUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReminderAlertPayload>
+        }
+        aggregate: {
+          args: Prisma.ReminderAlertAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateReminderAlert>
+        }
+        groupBy: {
+          args: Prisma.ReminderAlertGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReminderAlertGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ReminderAlertCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReminderAlertCountAggregateOutputType> | number
+        }
+      }
+    }
     Notification: {
       payload: Prisma.$NotificationPayload<ExtArgs>
       fields: Prisma.NotificationFieldRefs
@@ -564,6 +716,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.NotificationCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.NotificationCountAggregateOutputType> | number
+        }
+      }
+    }
+    EmailSendAttempt: {
+      payload: Prisma.$EmailSendAttemptPayload<ExtArgs>
+      fields: Prisma.EmailSendAttemptFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.EmailSendAttemptFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.EmailSendAttemptFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>
+        }
+        findFirst: {
+          args: Prisma.EmailSendAttemptFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.EmailSendAttemptFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>
+        }
+        findMany: {
+          args: Prisma.EmailSendAttemptFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>[]
+        }
+        create: {
+          args: Prisma.EmailSendAttemptCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>
+        }
+        createMany: {
+          args: Prisma.EmailSendAttemptCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.EmailSendAttemptCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>[]
+        }
+        delete: {
+          args: Prisma.EmailSendAttemptDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>
+        }
+        update: {
+          args: Prisma.EmailSendAttemptUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>
+        }
+        deleteMany: {
+          args: Prisma.EmailSendAttemptDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.EmailSendAttemptUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.EmailSendAttemptUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>[]
+        }
+        upsert: {
+          args: Prisma.EmailSendAttemptUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EmailSendAttemptPayload>
+        }
+        aggregate: {
+          args: Prisma.EmailSendAttemptAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateEmailSendAttempt>
+        }
+        groupBy: {
+          args: Prisma.EmailSendAttemptGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EmailSendAttemptGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.EmailSendAttemptCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EmailSendAttemptCountAggregateOutputType> | number
+        }
+      }
+    }
+    ProcessorRun: {
+      payload: Prisma.$ProcessorRunPayload<ExtArgs>
+      fields: Prisma.ProcessorRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ProcessorRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ProcessorRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>
+        }
+        findFirst: {
+          args: Prisma.ProcessorRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ProcessorRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>
+        }
+        findMany: {
+          args: Prisma.ProcessorRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>[]
+        }
+        create: {
+          args: Prisma.ProcessorRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>
+        }
+        createMany: {
+          args: Prisma.ProcessorRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ProcessorRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>[]
+        }
+        delete: {
+          args: Prisma.ProcessorRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>
+        }
+        update: {
+          args: Prisma.ProcessorRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.ProcessorRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ProcessorRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ProcessorRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.ProcessorRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProcessorRunPayload>
+        }
+        aggregate: {
+          args: Prisma.ProcessorRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateProcessorRun>
+        }
+        groupBy: {
+          args: Prisma.ProcessorRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProcessorRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ProcessorRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProcessorRunCountAggregateOutputType> | number
         }
       }
     }
@@ -680,6 +980,19 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
+export const UserProfileScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  emailVerifiedAt: 'emailVerifiedAt',
+  timezone: 'timezone',
+  defaultAlertTime: 'defaultAlertTime',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UserProfileScalarFieldEnum = (typeof UserProfileScalarFieldEnum)[keyof typeof UserProfileScalarFieldEnum]
+
+
 export const ReminderScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -690,6 +1003,7 @@ export const ReminderScalarFieldEnum = {
   status: 'status',
   parentReminderId: 'parentReminderId',
   completedAt: 'completedAt',
+  userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -697,10 +1011,27 @@ export const ReminderScalarFieldEnum = {
 export type ReminderScalarFieldEnum = (typeof ReminderScalarFieldEnum)[keyof typeof ReminderScalarFieldEnum]
 
 
-export const NotificationScalarFieldEnum = {
+export const ReminderAlertScalarFieldEnum = {
   id: 'id',
   reminderId: 'reminderId',
   scheduledFor: 'scheduledFor',
+  offsetMinutes: 'offsetMinutes',
+  scheduleVersion: 'scheduleVersion',
+  channel: 'channel',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ReminderAlertScalarFieldEnum = (typeof ReminderAlertScalarFieldEnum)[keyof typeof ReminderAlertScalarFieldEnum]
+
+
+export const NotificationScalarFieldEnum = {
+  id: 'id',
+  reminderId: 'reminderId',
+  reminderAlertId: 'reminderAlertId',
+  scheduledFor: 'scheduledFor',
+  scheduleVersion: 'scheduleVersion',
   channel: 'channel',
   status: 'status',
   attemptCount: 'attemptCount',
@@ -709,12 +1040,41 @@ export const NotificationScalarFieldEnum = {
   idempotencyKey: 'idempotencyKey',
   providerMessageId: 'providerMessageId',
   lastError: 'lastError',
+  lastErrorCode: 'lastErrorCode',
   sentAt: 'sentAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[keyof typeof NotificationScalarFieldEnum]
+
+
+export const EmailSendAttemptScalarFieldEnum = {
+  id: 'id',
+  purpose: 'purpose',
+  outcome: 'outcome',
+  sanitizedCode: 'sanitizedCode',
+  providerMessageId: 'providerMessageId',
+  attemptedAt: 'attemptedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type EmailSendAttemptScalarFieldEnum = (typeof EmailSendAttemptScalarFieldEnum)[keyof typeof EmailSendAttemptScalarFieldEnum]
+
+
+export const ProcessorRunScalarFieldEnum = {
+  id: 'id',
+  status: 'status',
+  claimed: 'claimed',
+  sent: 'sent',
+  failed: 'failed',
+  recovered: 'recovered',
+  sanitizedFailureCode: 'sanitizedFailureCode',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type ProcessorRunScalarFieldEnum = (typeof ProcessorRunScalarFieldEnum)[keyof typeof ProcessorRunScalarFieldEnum]
 
 
 export const SettingsScalarFieldEnum = {
@@ -830,6 +1190,13 @@ export type ListEnumNotificationChannelFieldRefInput<$PrismaModel> = FieldRefInp
 
 
 /**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
  * Reference to a field of type 'NotificationStatus'
  */
 export type EnumNotificationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'NotificationStatus'>
@@ -840,6 +1207,48 @@ export type EnumNotificationStatusFieldRefInput<$PrismaModel> = FieldRefInputTyp
  * Reference to a field of type 'NotificationStatus[]'
  */
 export type ListEnumNotificationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'NotificationStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EmailPurpose'
+ */
+export type EnumEmailPurposeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EmailPurpose'>
+    
+
+
+/**
+ * Reference to a field of type 'EmailPurpose[]'
+ */
+export type ListEnumEmailPurposeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EmailPurpose[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EmailAttemptOutcome'
+ */
+export type EnumEmailAttemptOutcomeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EmailAttemptOutcome'>
+    
+
+
+/**
+ * Reference to a field of type 'EmailAttemptOutcome[]'
+ */
+export type ListEnumEmailAttemptOutcomeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EmailAttemptOutcome[]'>
+    
+
+
+/**
+ * Reference to a field of type 'ProcessorRunStatus'
+ */
+export type EnumProcessorRunStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProcessorRunStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'ProcessorRunStatus[]'
+ */
+export type ListEnumProcessorRunStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProcessorRunStatus[]'>
     
 
 
@@ -1007,8 +1416,12 @@ export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions 
  */
 export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 export type GlobalOmitConfig = {
+  userProfile?: Prisma.UserProfileOmit
   reminder?: Prisma.ReminderOmit
+  reminderAlert?: Prisma.ReminderAlertOmit
   notification?: Prisma.NotificationOmit
+  emailSendAttempt?: Prisma.EmailSendAttemptOmit
+  processorRun?: Prisma.ProcessorRunOmit
   settings?: Prisma.SettingsOmit
 }
 

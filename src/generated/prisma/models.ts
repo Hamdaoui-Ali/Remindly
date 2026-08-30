@@ -8,7 +8,11 @@
  *
  * 🟢 You can import this file directly.
  */
-export type * from './models/Reminder'
-export type * from './models/Notification'
-export type * from './models/Settings'
-export type * from './commonInputTypes'
+export type * from './models/UserProfile.ts'
+export type * from './models/Reminder.ts'
+export type * from './models/ReminderAlert.ts'
+export type * from './models/Notification.ts'
+export type * from './models/EmailSendAttempt.ts'
+export type * from './models/ProcessorRun.ts'
+export type * from './models/Settings.ts'
+export type * from './commonInputTypes.ts'
