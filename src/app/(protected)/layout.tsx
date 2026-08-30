@@ -1,8 +1,8 @@
 import { AppShell } from '@/components/layout/app-shell';
-import { requireOwner } from '@/server/auth/require-owner';
+import { requireUser } from '@/server/auth/require-user';
 
 export default async function ProtectedLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const owner = await requireOwner();
+  const user = await requireUser();
 
-  return <AppShell ownerEmail={owner.email}><div className="protected-route">{children}</div></AppShell>;
+  return <AppShell ownerEmail={user.email}><div className="protected-route">{children}</div></AppShell>;
 }
