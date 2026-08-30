@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState, type FormEvent, type RefObject } from 'react';
+import { fromZonedTime } from 'date-fns-tz';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { reminderRequest, ReminderRequestError } from '@/app/(protected)/reminders/actions';
 import { Button } from '@/components/ui/button';
@@ -34,6 +36,13 @@ type FormValues = {
   leadDays: string;
   customAlertDate: string;
   alertTime: string;
+  alerts: FormAlert[];
+};
+
+type FormAlert = {
+  kind: 'offset' | 'absolute';
+  offsetMinutes: string;
+  scheduledFor: string;
 };
 
 const CUSTOM_LEAD_DAYS = 'custom';
@@ -55,6 +64,14 @@ function selectedLeadDays(values: FormValues): number {
     : Number(values.leadDays);
 }
 
+function selectedLeadDaysForDisplay(values: FormValues): number | null {
+  try {
+    return selectedLeadDays(values);
+  } catch {
+    return null;
+  }
+}
+
 function initialValues(mode: DrawerMode, reminder: ReminderListPresentation | null, defaultAlertTime: string): FormValues {
   if (reminder && mode !== 'add') {
     const storedLeadDays = String(reminder.alertLeadDays);
@@ -67,9 +84,19 @@ function initialValues(mode: DrawerMode, reminder: ReminderListPresentation | nu
         ? ''
         : calculateReminderDate(reminder.endDate, reminder.alertLeadDays),
       alertTime: reminder.alertTime,
+      alerts: reminder.alerts?.length
+        ? reminder.alerts.map((alert) => ({
+            kind: alert.offsetMinutes === null ? 'absolute' : 'offset',
+            offsetMinutes: String(alert.offsetMinutes ?? ''),
+            scheduledFor: alert.scheduledFor.slice(0, 16),
+          }))
+        : [{ kind: 'offset', offsetMinutes: String(reminder.alertLeadDays * 24 * 60), scheduledFor: '' }],
     };
   }
-  return { name: '', endDate: '', leadDays: '7', customAlertDate: '', alertTime: defaultAlertTime };
+  return {
+    name: '', endDate: '', leadDays: '7', customAlertDate: '', alertTime: defaultAlertTime,
+    alerts: [{ kind: 'offset', offsetMinutes: '10080', scheduledFor: '' }],
+  };
 }
 
 function validates(values: FormValues) {
@@ -88,6 +115,14 @@ function validates(values: FormValues) {
       }
     }
   }
+  values.alerts.forEach((alert, index) => {
+    if (alert.kind === 'offset' && (!Number.isInteger(Number(alert.offsetMinutes)) || Number(alert.offsetMinutes) <= 0)) {
+      errors[`alert-${index}` as keyof FormValues] = 'Enter a positive alert offset.';
+    }
+    if (alert.kind === 'absolute' && !alert.scheduledFor) {
+      errors[`alert-${index}` as keyof FormValues] = 'Choose an absolute alert time.';
+    }
+  });
   return errors;
 }
 
@@ -119,6 +154,23 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
     setErrors((current) => ({ ...current, [field]: undefined }));
   };
 
+  const updateAlert = (index: number, patch: Partial<FormAlert>) => {
+    setValues((current) => ({
+      ...current,
+      alerts: current.alerts.map((alert, alertIndex) => alertIndex === index ? { ...alert, ...patch } : alert),
+    }));
+  };
+
+  const addAlert = () => setValues((current) => ({
+    ...current,
+    alerts: [...current.alerts, { kind: 'offset', offsetMinutes: '1440', scheduledFor: '' }],
+  }));
+
+  const removeAlert = (index: number) => setValues((current) => ({
+    ...current,
+    alerts: current.alerts.length > 1 ? current.alerts.filter((_, alertIndex) => alertIndex !== index) : current.alerts,
+  }));
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextErrors = validates(values);
@@ -126,11 +178,19 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
     setRequestError(null);
     if (Object.keys(nextErrors).length > 0) return;
 
+    const dueAt = fromZonedTime(`${values.endDate}T${values.alertTime}:00`, timezone).toISOString();
+    const alerts = values.alerts.map((alert, index) => index === 0 && alert.kind === 'offset'
+      ? { kind: 'offset' as const, offsetMinutes: selectedLeadDays(values) * 24 * 60 }
+      : alert.kind === 'offset'
+        ? { kind: 'offset' as const, offsetMinutes: Number(alert.offsetMinutes) }
+        : { kind: 'absolute' as const, scheduledFor: fromZonedTime(alert.scheduledFor, timezone).toISOString() });
     const body = {
       name: values.name.trim(),
       endDate: values.endDate,
       leadDays: selectedLeadDays(values),
       alertTime: values.alertTime,
+      dueAt,
+      alerts,
     };
     const url = mode === 'add'
       ? '/api/reminders'
@@ -210,6 +270,65 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
             onChange={(event) => update('alertTime', event.target.value)}
           />
         </Field>
+
+        <fieldset className="reminder-alerts">
+          <legend>Alerts</legend>
+          <p>Offset alerts move with the deadline. Absolute alerts stay fixed.</p>
+          {values.alerts.map((alert, index) => (
+            <div className="reminder-alerts__row" key={index}>
+              <Field htmlFor={`reminder-alert-type-${index}`} label={`Alert ${index + 1} type`} error={errors[`alert-${index}` as keyof FormValues]}>
+                <Select
+                  name={`alertType-${index}`}
+                  value={alert.kind}
+                  aria-label="Alert type"
+                  onChange={(event) => updateAlert(index, { kind: event.target.value as FormAlert['kind'] })}
+                >
+                  <option value="offset">Before deadline</option>
+                  <option value="absolute">At an exact time</option>
+                </Select>
+              </Field>
+              {alert.kind === 'offset' ? (
+                <Field htmlFor={`reminder-alert-offset-${index}`} label="Minutes before">
+                  <input
+                    id={`reminder-alert-offset-${index}`}
+                    type="number"
+                    min="1"
+                    value={index === 0
+                      ? selectedLeadDaysForDisplay(values) === null
+                        ? ''
+                        : selectedLeadDaysForDisplay(values)! * 24 * 60
+                      : alert.offsetMinutes}
+                    onChange={(event) => index === 0
+                      ? update('leadDays', String(Number(event.target.value) / (24 * 60)))
+                      : updateAlert(index, { offsetMinutes: event.target.value })}
+                  />
+                </Field>
+              ) : (
+                <Field htmlFor={`reminder-alert-absolute-${index}`} label="Alert date and time">
+                  <input
+                    id={`reminder-alert-absolute-${index}`}
+                    type="datetime-local"
+                    value={alert.scheduledFor}
+                    onChange={(event) => updateAlert(index, { scheduledFor: event.target.value })}
+                  />
+                </Field>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                aria-label={`Remove alert ${index + 1}`}
+                onClick={() => removeAlert(index)}
+                disabled={values.alerts.length === 1}
+              >
+                <Trash2 aria-hidden="true" size={16} />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="secondary" onClick={addAlert}>
+            <Plus aria-hidden="true" size={16} />
+            Add alert
+          </Button>
+        </fieldset>
 
         {warning ? <InlineNotice>The email alert is already due. Saving will make it eligible to send now.</InlineNotice> : null}
         {requestError ? <InlineNotice tone="error">{requestError}</InlineNotice> : null}
