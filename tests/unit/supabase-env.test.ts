@@ -13,13 +13,19 @@ describe('parseSupabaseEnv', () => {
   });
 
   it('accepts public credentials without requiring the server-only secret', () => {
-    const { SUPABASE_SECRET_KEY: _secretKey, ...publicEnv } = validEnv;
+    const publicEnv = {
+      NEXT_PUBLIC_SUPABASE_URL: validEnv.NEXT_PUBLIC_SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: validEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    };
 
     expect(parseSupabasePublicEnv(publicEnv)).toEqual(publicEnv);
   });
 
   it('rejects a missing server-only secret key', () => {
-    const { SUPABASE_SECRET_KEY: _secretKey, ...withoutSecret } = validEnv;
+    const withoutSecret = {
+      NEXT_PUBLIC_SUPABASE_URL: validEnv.NEXT_PUBLIC_SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: validEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    };
 
     expect(() => parseSupabaseEnv(withoutSecret)).toThrow('SUPABASE_SECRET_KEY');
   });
