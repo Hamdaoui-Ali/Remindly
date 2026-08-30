@@ -1,5 +1,5 @@
 import { jsonResponse } from '@/lib/http';
-import { requireOwner } from '@/server/auth/require-owner';
+import { requireUser } from '@/server/auth/require-user';
 import { presentReminderCycle, presentReminderList } from '@/server/reminders/presenters';
 import { ReminderService } from '@/server/reminders/service';
 import { reminderInputSchema } from '@/server/validation/reminders';
@@ -10,11 +10,11 @@ const service = new ReminderService();
 
 export async function GET() {
   try {
-    await requireOwner();
+    const user = await requireUser();
     const now = new Date();
     const [items, ownerTimezone] = await Promise.all([
-      service.listActiveReminders(now),
-      presentationTimezone(),
+      service.listActiveReminders(user.id, now),
+      presentationTimezone(user.id),
     ]);
     return jsonResponse({ reminders: presentReminderList(items, ownerTimezone) });
   } catch (error) {
@@ -24,11 +24,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireOwner();
+    const user = await requireUser();
     const input = reminderInputSchema.parse(await request.json());
-    const ownerTimezone = await presentationTimezone();
+    const ownerTimezone = await presentationTimezone(user.id);
     const now = new Date();
-    const cycle = await service.createReminder(input, now);
+    const cycle = await service.createReminder(user.id, input, now);
     return jsonResponse({ cycle: presentReminderCycle(cycle, ownerTimezone, now) }, 201);
   } catch (error) {
     return reminderRouteError(error);

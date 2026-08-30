@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from '@/components/settings/settings-page';
 
 const settings = {
-  notificationEmail: 'owner@example.com',
+  email: 'owner@example.com',
+  emailVerified: true,
   timezone: 'Africa/Casablanca',
   defaultAlertTime: '09:00',
-  protectedAccess: true as const,
 };
 
 beforeEach(() => {
@@ -20,7 +20,8 @@ describe('SettingsPage', () => {
     render(<SettingsPage settings={settings} />);
 
     expect(screen.getByText(/protected access/i)).toBeVisible();
-    expect(screen.getByText(/enabled/i)).toBeVisible();
+    expect(screen.getByText(/verified/i)).toBeVisible();
+    expect(screen.getByLabelText('Verified email')).toHaveValue('owner@example.com');
     expect(screen.queryByRole('textbox', { name: /password/i })).not.toBeInTheDocument();
   });
 
@@ -44,18 +45,18 @@ describe('SettingsPage', () => {
   it('preserves invalid edits, reports the field, and lets Cancel restore loaded values', async () => {
     const user = userEvent.setup();
     render(<SettingsPage settings={settings} />);
-    const email = screen.getByLabelText('Notification email');
+    const timezone = screen.getByLabelText('Timezone');
 
-    await user.clear(email);
-    await user.type(email, 'not-an-email');
+    await user.clear(timezone);
+    await user.type(timezone, 'Not/A-Timezone');
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(screen.getByText(/enter a valid email/i)).toBeVisible();
-    expect(email).toHaveValue('not-an-email');
-    expect(email).toHaveFocus();
+    expect(screen.getByText(/enter a valid iana timezone/i)).toBeVisible();
+    expect(timezone).toHaveValue('Not/A-Timezone');
+    expect(timezone).toHaveFocus();
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(email).toHaveValue('owner@example.com');
-    expect(screen.queryByText(/enter a valid email/i)).not.toBeInTheDocument();
+    expect(timezone).toHaveValue('Africa/Casablanca');
+    expect(screen.queryByText(/enter a valid iana timezone/i)).not.toBeInTheDocument();
   });
 });

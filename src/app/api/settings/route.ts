@@ -1,11 +1,11 @@
 import { ZodError } from 'zod';
 
 import { errorResponse, jsonResponse } from '@/lib/http';
-import { requireOwner } from '@/server/auth/require-owner';
-import { SettingsNotConfiguredError, SettingsService } from '@/server/settings/service';
-import { updateSettingsSchema } from '@/server/settings/types';
+import { requireUser } from '@/server/auth/require-user';
+import { ProfileNotConfiguredError, ProfileService } from '@/server/profile/service';
+import type { UpdateUserSettingsInput } from '@/server/profile/service';
 
-const service = new SettingsService();
+const service = new ProfileService();
 
 function settingsRouteError(error: unknown) {
   if (error instanceof ZodError) {
@@ -15,24 +15,24 @@ function settingsRouteError(error: unknown) {
     }, 400);
   }
   if (error instanceof SyntaxError) return errorResponse('Invalid JSON body', 400);
-  if (error instanceof SettingsNotConfiguredError) return errorResponse('Settings are not configured', 503);
+  if (error instanceof ProfileNotConfiguredError) return errorResponse('Settings are not configured', 503);
   return errorResponse('Unable to process settings', 500);
 }
 
 export async function GET() {
-  await requireOwner();
+  const user = await requireUser();
   try {
-    return jsonResponse({ settings: await service.getSettings() });
+    return jsonResponse({ settings: await service.getSettings(user.id) });
   } catch (error) {
     return settingsRouteError(error);
   }
 }
 
 export async function PATCH(request: Request) {
-  await requireOwner();
+  const user = await requireUser();
   try {
-    const input = updateSettingsSchema.parse(await request.json());
-    return jsonResponse({ settings: await service.updateSettings(input) });
+    const input = await request.json() as UpdateUserSettingsInput;
+    return jsonResponse({ settings: await service.updateSettings(user.id, input) });
   } catch (error) {
     return settingsRouteError(error);
   }

@@ -7,12 +7,19 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { InlineNotice } from '@/components/ui/inline-notice';
-import type { OwnerSettings } from '@/server/settings/types';
-import { settingsInputSchema } from '@/server/settings/types';
+import type { UserSettings } from '@/server/profile/service';
+import { isValidTimezone } from '@/server/settings/types';
+import { alertTimeSchema } from '@/server/validation/reminders';
 import { SettingsSection } from './settings-section';
+import { z } from 'zod';
 
-type EditableSettings = Pick<OwnerSettings, 'notificationEmail' | 'timezone' | 'defaultAlertTime'>;
+type EditableSettings = Pick<UserSettings, 'timezone' | 'defaultAlertTime'>;
 type FieldErrors = Partial<Record<keyof EditableSettings, string>>;
+
+const settingsInputSchema = z.object({
+  timezone: z.string().trim().min(1, 'Enter a timezone').refine(isValidTimezone, 'Enter a valid IANA timezone'),
+  defaultAlertTime: alertTimeSchema,
+});
 
 const TIMEZONE_SUGGESTIONS = [
   'Africa/Casablanca',
@@ -22,9 +29,8 @@ const TIMEZONE_SUGGESTIONS = [
   'Asia/Dubai',
 ];
 
-export function SettingsPage({ settings }: { settings: OwnerSettings }) {
+export function SettingsPage({ settings }: { settings: UserSettings }) {
   const initial = {
-    notificationEmail: settings.notificationEmail,
     timezone: settings.timezone,
     defaultAlertTime: settings.defaultAlertTime,
   };
@@ -33,7 +39,6 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [feedback, setFeedback] = useState<{ tone: 'error' | 'success'; message: string } | null>(null);
   const [pending, setPending] = useState(false);
-  const emailRef = useRef<HTMLInputElement>(null);
   const timezoneRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLInputElement>(null);
 
@@ -44,9 +49,9 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
   };
 
   const focusFirstError = (nextErrors: FieldErrors) => {
-    const first = (['notificationEmail', 'timezone', 'defaultAlertTime'] as const)
+    const first = (['timezone', 'defaultAlertTime'] as const)
       .find((field) => nextErrors[field]);
-    ({ notificationEmail: emailRef, timezone: timezoneRef, defaultAlertTime: timeRef })[first ?? 'notificationEmail']
+    ({ timezone: timezoneRef, defaultAlertTime: timeRef })[first ?? 'timezone']
       .current?.focus();
   };
 
@@ -57,7 +62,6 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
     if (!validation.success) {
       const flattened = validation.error.flatten().fieldErrors;
       const nextErrors: FieldErrors = {
-        notificationEmail: flattened.notificationEmail?.[0],
         timezone: flattened.timezone?.[0],
         defaultAlertTime: flattened.defaultAlertTime?.[0],
       };
@@ -76,11 +80,10 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
       const payload = await response.json() as {
         error?: string;
         fields?: Record<string, string[]>;
-        settings?: OwnerSettings;
+        settings?: UserSettings;
       };
       if (!response.ok || !payload.settings) {
         const serverErrors: FieldErrors = {
-          notificationEmail: payload.fields?.notificationEmail?.[0],
           timezone: payload.fields?.timezone?.[0],
           defaultAlertTime: payload.fields?.defaultAlertTime?.[0],
         };
@@ -90,7 +93,6 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
         return;
       }
       const saved = {
-        notificationEmail: payload.settings.notificationEmail,
         timezone: payload.settings.timezone,
         defaultAlertTime: payload.settings.defaultAlertTime,
       };
@@ -116,17 +118,11 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
       <PageHeader title="Settings" description="Manage where and when Remindly sends your alerts." />
       <form className="settings-form" noValidate onSubmit={submit}>
         <SettingsSection
-          title="Notifications"
-          description="Choose the inbox that receives reminder emails."
+          title="Account email"
+          description="Reminder emails are sent to your verified account email."
         >
-          <Field htmlFor="notification-email" label="Notification email" error={errors.notificationEmail}>
-            <input
-              ref={emailRef}
-              type="email"
-              autoComplete="email"
-              value={values.notificationEmail}
-              onChange={(event) => update('notificationEmail', event.target.value)}
-            />
+          <Field htmlFor="account-email" label="Verified email">
+            <input id="account-email" type="email" autoComplete="email" value={settings.email} readOnly />
           </Field>
         </SettingsSection>
 
@@ -171,11 +167,11 @@ export function SettingsPage({ settings }: { settings: OwnerSettings }) {
 
         <SettingsSection
           title="Protected access"
-          description="Your workspace is private and available only to the configured owner account."
+          description="Your workspace is private and tied to your Supabase account."
         >
           <div className="protected-access" role="status" aria-label="Protected access enabled">
             <ShieldCheck aria-hidden="true" size={22} strokeWidth={1.75} />
-            <span><strong>Enabled</strong><small>Owner credentials are managed securely outside this page.</small></span>
+            <span><strong>{settings.emailVerified ? 'Verified' : 'Unverified'}</strong><small>Authentication is managed securely by Supabase.</small></span>
           </div>
         </SettingsSection>
 
