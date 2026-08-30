@@ -14,11 +14,19 @@ describe('Supabase profile synchronization SQL', () => {
     expect(sql).toContain('on_auth_user_created');
   });
 
-  it('synchronizes email changes and removes profiles when Auth users are deleted', async () => {
+  it('synchronizes email changes and delegates deletion to the Auth foreign key', async () => {
     const sql = await readFile(profileSqlPath, 'utf8');
 
     expect(sql).toContain('on_auth_user_updated');
-    expect(sql).toContain('on_auth_user_deleted');
-    expect(sql).toContain('delete from public.user_profiles');
+    expect(sql).toContain('user_profiles_auth_user_fkey');
+    expect(sql).toContain('on delete cascade');
+  });
+
+  it('makes Auth deletion cascade explicit and keeps deployment idempotent', async () => {
+    const sql = await readFile(profileSqlPath, 'utf8');
+
+    expect(sql).toContain('foreign key (id) references auth.users(id) on delete cascade');
+    expect(sql).toContain('duplicate_object');
+    expect(sql).toContain('create or replace function public.handle_auth_user_update');
   });
 });
