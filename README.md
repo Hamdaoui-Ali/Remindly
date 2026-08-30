@@ -17,7 +17,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and replace every placeholder. Prisma CLI loads `.env` through `prisma.config.ts`, and Next.js also loads it for local development. Generate secrets locally:
+2. Copy `.env.example` to `.env` and replace every placeholder. `DATABASE_URL` is the runtime connection; `DIRECT_URL` is the direct/session connection used by Prisma CLI migrations. Prisma CLI loads `.env` through `prisma.config.ts`, and Next.js also loads it for local development. Generate secrets locally:
 
    ```powershell
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -122,4 +122,4 @@ The local worker attempts due processing every 30 seconds, so Remindly normally 
 
 ## Production environment
 
-Deploy the Next.js application as one service with managed PostgreSQL. Required server-only values are documented in `.env.example`. Keep `AUTH_SECRET`, `OWNER_PASSWORD_HASH`, `SCHEDULER_SECRET`, `RESEND_API_KEY`, and the database URL in the deployment platform's encrypted secret store. Set both `APP_URL` and `NEXTAUTH_URL` to the canonical HTTPS origin.
+Deploy the Next.js application as one service with managed PostgreSQL. Required server-only values are documented in `.env.example`. Keep `AUTH_SECRET`, `OWNER_PASSWORD_HASH`, `SCHEDULER_SECRET`, `RESEND_API_KEY`, `DATABASE_URL`, and `DIRECT_URL` in the deployment platform's encrypted secret store. For Supabase, use the pooled connection for `DATABASE_URL` and the direct/session connection for `DIRECT_URL`. Set both `APP_URL` and `NEXTAUTH_URL` to the canonical HTTPS origin.

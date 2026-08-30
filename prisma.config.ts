@@ -8,6 +8,8 @@ export default defineConfig({
     seed: 'tsx prisma/seed.ts',
   },
   datasource: {
-    url: env('DATABASE_URL'),
+    // Prisma CLI needs a direct/session connection for migrations. Runtime
+    // application traffic continues to use DATABASE_URL in src/server/db/client.ts.
+    url: env('DIRECT_URL'),
   },
 });
