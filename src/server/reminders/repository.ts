@@ -1,10 +1,11 @@
 import type { Prisma, PrismaClient, Reminder, ReminderStatus } from '@/generated/prisma/client';
-import type { ReminderWithNotifications } from './types';
+import type { ReminderWithAlerts, ReminderWithNotifications } from './types';
 
 export type ReminderDatabase = PrismaClient | Prisma.TransactionClient;
 
 export interface CreateReminderRecord {
   name: string;
+  dueAt?: Date;
   endDate: Date;
   alertLeadDays: number;
   alertTime: string;
@@ -14,6 +15,7 @@ export interface CreateReminderRecord {
 
 export interface UpdateReminderRecord {
   name?: string;
+  dueAt?: Date;
   endDate?: Date;
   alertLeadDays?: number;
   alertTime?: string;
@@ -30,7 +32,17 @@ export class ReminderRepository {
   findByIdWithNotifications(userIdOrId: string, id?: string): Promise<ReminderWithNotifications | null> {
     return this.db.reminder.findFirst({
       where: id ? { id, userId: userIdOrId } : { id: userIdOrId },
-      include: { notifications: { orderBy: [{ scheduledFor: 'desc' }, { createdAt: 'desc' }] } },
+      include: {
+        notifications: { orderBy: [{ scheduledFor: 'desc' }, { createdAt: 'desc' }] },
+        alerts: { orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+  }
+
+  findByIdWithAlerts(userIdOrId: string, id?: string): Promise<ReminderWithAlerts | null> {
+    return this.db.reminder.findFirst({
+      where: id ? { id, userId: userIdOrId } : { id: userIdOrId },
+      include: { alerts: { orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }] } },
     });
   }
 

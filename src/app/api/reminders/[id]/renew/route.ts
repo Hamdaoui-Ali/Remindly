@@ -2,7 +2,7 @@ import { jsonResponse } from '@/lib/http';
 import { requireUser } from '@/server/auth/require-user';
 import { presentReminderCycle } from '@/server/reminders/presenters';
 import { ReminderService } from '@/server/reminders/service';
-import { reminderIdSchema, reminderInputSchema } from '@/server/validation/reminders';
+import { multiAlertReminderInputSchema, reminderIdSchema } from '@/server/validation/reminders';
 import { reminderRouteError } from '../../errors';
 import { presentationTimezone } from '../../presentation-timezone';
 
@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const user = await requireUser();
     const [routeParams, input] = await Promise.all([
       params,
-      request.json().then((body) => reminderInputSchema.parse(body)),
+      request.json().then((body) => multiAlertReminderInputSchema.parse(body)),
     ]);
     const id = reminderIdSchema.parse(routeParams.id);
     const ownerTimezone = await presentationTimezone(user.id);

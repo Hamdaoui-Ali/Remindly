@@ -30,7 +30,11 @@ describe('reminder route identifiers', () => {
     }), malformedContext)],
     ['done', () => completeReminder(new Request('http://localhost/api/reminders/not-a-uuid/done', { method: 'POST' }), malformedContext)],
     ['renew', () => renewReminder(new Request('http://localhost/api/reminders/not-a-uuid/renew', {
-      method: 'POST', body: JSON.stringify({ name: 'Next', endDate: '2027-01-01', leadDays: 7, alertTime: '09:00' }),
+      method: 'POST', body: JSON.stringify({
+        name: 'Next',
+        dueAt: '2027-01-01T09:00:00+00:00',
+        alerts: [{ kind: 'offset', offsetMinutes: 7 * 24 * 60 }],
+      }),
     }), malformedContext)],
   ])('returns 400 before persistence for a malformed %s identifier', async (_name, request) => {
     const detail = vi.spyOn(ReminderService.prototype, 'getReminderWithHistory');
@@ -53,7 +57,11 @@ it('does not create a reminder when presentation settings cannot be loaded', asy
   const create = vi.spyOn(ReminderService.prototype, 'createReminder');
   const response = await createReminder(new Request('http://localhost/api/reminders', {
     method: 'POST',
-    body: JSON.stringify({ name: 'Passport', endDate: '2027-01-01', leadDays: 7, alertTime: '09:00' }),
+    body: JSON.stringify({
+      name: 'Passport',
+      dueAt: '2027-01-01T09:00:00+00:00',
+      alerts: [{ kind: 'offset', offsetMinutes: 7 * 24 * 60 }],
+    }),
   }));
 
   expect(response.status).toBe(500);

@@ -1,4 +1,4 @@
-import type { Notification, Reminder } from '@/generated/prisma/client';
+import type { Notification, Reminder, ReminderAlert } from '@/generated/prisma/client';
 import type { ReminderCycle, ReminderListItem, ReminderMutationResult, ReminderWithNotifications } from './types';
 import type { Urgency } from '@/server/urgency/types';
 import { calendarDayDifference } from '@/server/urgency/calendar';
@@ -14,11 +14,22 @@ const URGENCY_RANK: Record<Urgency, number> = {
 export interface ReminderPresentation {
   id: string;
   name: string;
+  dueAt?: string | null;
   endDate: string;
   alertLeadDays: number;
   alertTime: string;
   status: Reminder['status'];
   parentReminderId: string | null;
+  alerts?: AlertPresentation[];
+}
+
+export interface AlertPresentation {
+  id: string;
+  scheduledFor: string;
+  offsetMinutes: number | null;
+  scheduleVersion: number;
+  enabled: boolean;
+  channel: ReminderAlert['channel'];
 }
 
 export interface ScheduledEmailPresentation {
@@ -58,15 +69,28 @@ function notificationLabel(scheduledFor: Date, timezone: string): string {
   return `Scheduled email ${formatter.format(scheduledFor)}`;
 }
 
-export function presentReminder(reminder: Reminder): ReminderPresentation {
+function presentAlert(alert: ReminderAlert): AlertPresentation {
+  return {
+    id: alert.id,
+    scheduledFor: alert.scheduledFor.toISOString(),
+    offsetMinutes: alert.offsetMinutes,
+    scheduleVersion: alert.scheduleVersion,
+    enabled: alert.enabled,
+    channel: alert.channel,
+  };
+}
+
+export function presentReminder(reminder: Reminder, alerts: ReminderAlert[] = []): ReminderPresentation {
   return {
     id: reminder.id,
     name: reminder.name,
+    dueAt: reminder.dueAt?.toISOString() ?? null,
     endDate: dateOnly(reminder.endDate),
     alertLeadDays: reminder.alertLeadDays,
     alertTime: reminder.alertTime,
     status: reminder.status,
     parentReminderId: reminder.parentReminderId,
+    alerts: alerts.map(presentAlert),
   };
 }
 
@@ -111,7 +135,7 @@ function presentNotification(notification: Notification) {
 
 export function presentReminderHistory(reminder: ReminderWithNotifications) {
   return {
-    ...presentReminder(reminder),
+    ...presentReminder(reminder, reminder.alerts),
     notifications: reminder.notifications.map(presentNotification),
   };
 }
@@ -134,12 +158,18 @@ function mutationListItem(result: ReminderMutationResult, now: Date, timezone: s
 }
 
 export function presentReminderMutation(result: ReminderMutationResult, timezone: string, now: Date) {
-  return presentReminderListItem(mutationListItem(result, now, timezone), timezone);
+  return {
+    ...presentReminderListItem(mutationListItem(result, now, timezone), timezone),
+    alerts: (result.alerts ?? []).map(presentAlert),
+  };
 }
 
 export function presentReminderCycle(cycle: ReminderCycle, timezone: string, now = new Date()) {
   return {
-    reminder: presentReminderMutation(cycle, timezone, now),
+    reminder: {
+      ...presentReminderMutation(cycle, timezone, now),
+      alerts: (cycle.alerts ?? []).map(presentAlert),
+    },
     notification: {
       ...presentNotification(cycle.notification),
       label: notificationLabel(cycle.notification.scheduledFor, timezone),
