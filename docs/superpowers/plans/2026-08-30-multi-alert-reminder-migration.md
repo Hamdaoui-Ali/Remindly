@@ -38,7 +38,9 @@
   - `type ReminderAlertInput = { kind: 'offset'; offsetMinutes: number } | { kind: 'absolute'; scheduledFor: string }`.
   - `type ResolvedReminderAlert = { scheduledFor: Date; offsetMinutes: number | null }`.
   - `resolveReminderAlerts(dueAt: Date, alerts: ReminderAlertInput[], timezone: string): ResolvedReminderAlert[]`.
-  - `reminderInputSchema` accepting `{ name, dueAt, alerts }` for authenticated routes.
+  - `multiAlertReminderInputSchema` accepting `{ name, dueAt, alerts }` for authenticated routes.
+  - `multiAlertReminderPatchSchema` accepting a non-empty subset of `name`, `dueAt`, and `alerts`.
+  - Existing `reminderInputSchema` and `reminderPatchSchema` remain unchanged until Task 4 removes their authenticated route usage.
 
 - [ ] **Step 1: Write failing unit tests** for one offset alert, one absolute alert, duplicate schedules, zero/negative offsets, ten-alert maximum, strict-before-deadline validation, malformed timestamps, and a DST boundary.
 
@@ -153,7 +155,7 @@ git commit -m "feat: add alert-linked notification ledger primitives"
 - Test: `tests/app/reminder-routes.test.ts`
 
 **Interfaces:**
-- Consumes: `reminderInputSchema`, `resolveReminderAlerts`, and alert repository primitives.
+- Consumes: `multiAlertReminderInputSchema`, `multiAlertReminderPatchSchema`, `resolveReminderAlerts`, and alert repository primitives.
 - Produces:
   - `CreateReminderInput { name: string; dueAt: string; alerts: ReminderAlertInput[] }`.
   - `UpdateReminderInput { name?: string; dueAt?: string; alerts?: ReminderAlertInput[] }`.
