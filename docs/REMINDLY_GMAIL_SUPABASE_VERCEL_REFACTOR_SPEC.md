@@ -1087,6 +1087,7 @@ model ReminderAlert {
   reminderId      String              @map("reminder_id") @db.Uuid
   scheduledFor    DateTime            @map("scheduled_for") @db.Timestamptz(6)
   offsetMinutes   Int?                @map("offset_minutes")
+  scheduleVersion Int                 @default(1) @map("schedule_version")
   channel         NotificationChannel @default(EMAIL)
   enabled         Boolean             @default(true)
   createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1096,6 +1097,7 @@ model ReminderAlert {
   notifications Notification[]
 
   @@index([reminderId, scheduledFor])
+  @@unique([reminderId, scheduledFor, channel])
   @@map("reminder_alerts")
 }
 ```
@@ -1107,6 +1109,7 @@ model Notification {
   id                  String              @id @default(uuid()) @db.Uuid
   reminderAlertId     String              @map("reminder_alert_id") @db.Uuid
   scheduledFor        DateTime            @map("scheduled_for") @db.Timestamptz(6)
+  scheduleVersion     Int                 @map("schedule_version")
   channel             NotificationChannel @default(EMAIL)
   status              NotificationStatus  @default(PENDING)
   attemptCount        Int                 @default(0) @map("attempt_count")
@@ -1121,9 +1124,61 @@ model Notification {
 
   alert ReminderAlert @relation(fields: [reminderAlertId], references: [id], onDelete: Cascade)
 
-  @@unique([reminderAlertId, scheduledFor, channel])
+  @@unique([reminderAlertId, scheduleVersion, channel])
   @@index([status, nextAttemptAt, scheduledFor])
   @@map("notifications")
+}
+```
+
+### Operational ledgers
+
+These models contain no recipient address, Auth token, subject, body, or reminder content.
+
+```prisma
+enum EmailPurpose {
+  REMINDER
+  AUTH
+}
+
+enum EmailAttemptOutcome {
+  RESERVED
+  ACCEPTED
+  DEFINITE_FAILURE
+  UNKNOWN_OUTCOME
+}
+
+model EmailSendAttempt {
+  id                String              @id @default(uuid()) @db.Uuid
+  purpose           EmailPurpose
+  outcome           EmailAttemptOutcome @default(RESERVED)
+  sanitizedCode     String?             @map("sanitized_code")
+  providerMessageId String?             @map("provider_message_id")
+  attemptedAt       DateTime            @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(6)
+
+  @@index([attemptedAt, purpose, outcome])
+  @@map("email_send_attempts")
+}
+
+enum ProcessorRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model ProcessorRun {
+  id                   String             @id @default(uuid()) @db.Uuid
+  status               ProcessorRunStatus @default(RUNNING)
+  claimed              Int                @default(0)
+  sent                 Int                @default(0)
+  failed               Int                @default(0)
+  recovered            Int                @default(0)
+  sanitizedFailureCode String?            @map("sanitized_failure_code")
+  startedAt            DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime?          @map("completed_at") @db.Timestamptz(6)
+
+  @@index([status, startedAt])
+  @@map("processor_runs")
 }
 ```
 
@@ -1169,6 +1224,42 @@ America/New_York
 The UI may collect local date/time, but the server must convert it to an absolute instant before persistence.
 
 Never store a timezone offset such as `+01:00` as the user's timezone because daylight-saving rules can change.
+
+## 8.4 Alert rule authority and invariants
+
+`scheduledFor` is the authoritative delivery instant used by the processor. `offsetMinutes`, when present, records the user-selected fixed-duration rule used to derive that instant.
+
+MVP semantics are intentionally fixed-duration:
+
+```text
+scheduledFor = dueAt - offsetMinutes minutes
+```
+
+Therefore, `1 day before` means exactly 1,440 minutes before the absolute `dueAt` instant. If the product later promises calendar-local behavior such as “the previous local day at 09:00,” introduce an explicit rule model instead of overloading `offsetMinutes`.
+
+Enforce these invariants in validation and, where Prisma cannot express them, in versioned PostgreSQL constraints:
+
+- `offsetMinutes` is a positive integer when present;
+- `scheduledFor < reminder.dueAt` for offset-based alerts;
+- duplicate `(reminderId, scheduledFor, channel)` alerts are rejected;
+- all timestamps are persisted as `timestamptz` absolute instants;
+- changing the user's profile timezone does not silently move existing absolute schedules;
+- changing `dueAt` recomputes enabled offset-based alerts in one transaction;
+- custom absolute alerts remain fixed unless the user explicitly edits them.
+
+Editing behavior:
+
+1. Preserve all `SENT` notifications as immutable history.
+2. Cancel obsolete `PENDING` or `FAILED` notifications.
+3. Do not mutate a notification leased as `PROCESSING`; mark its alert revision obsolete and let lease-guarded processing cancel it before send.
+4. Create new notification rows with new UUID/idempotency keys for the revised schedule.
+5. Increment an alert revision/version so the processor can verify that a claimed notification still belongs to the current schedule.
+
+Add an integer `scheduleVersion` to `ReminderAlert` and copy it to `Notification`. The processor sends only when notification and alert versions match. This makes edit/send races explicit rather than relying only on timestamp equality.
+
+## 8.5 Recipient-at-send policy
+
+Notifications do not snapshot the recipient email. At send time, the processor resolves the current `UserProfile.email` and requires a non-null `emailVerifiedAt`. An account email change therefore redirects future unsent reminders to the newly verified address. If the account is temporarily unverified, due notifications fail with a sanitized non-provider code and follow a bounded retry policy without calling Gmail.
 
 ---
 
@@ -1372,9 +1463,13 @@ GMAIL_SENDER_NAME=Remindly
 Optional controls:
 
 ```env
-GMAIL_REMINDER_DAILY_BUDGET=350
+GMAIL_TOTAL_DAILY_BUDGET=350
+GMAIL_AUTH_RESERVE=50
 GMAIL_REQUEST_TIMEOUT_MS=10000
+GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS=4000
 ```
+
+The Auth Hook total timeout includes token refresh and Gmail send; individual fetch timeouts must be shorter than this total. The reminder processor may use the longer request timeout because it is not inside Supabase's five-second Auth transaction.
 
 The sender budget leaves headroom below Gmail's standard account daily sending limit for:
 
@@ -1521,7 +1616,8 @@ Suggested mapping:
 | Google token endpoint `invalid_grant` | auth_revoked | No automatic rapid retry |
 | Gmail 400 due to invalid message | permanent | No |
 | Gmail 401 after token refresh | auth_revoked/config | No rapid retry |
-| Gmail 403 quota/rate reason | rate_limited | Yes, delayed |
+| Gmail 403 with documented quota/rate reason | rate_limited | Yes, delayed |
+| Gmail 403 permission/scope/policy reason | permanent or auth_revoked/config | No rapid retry |
 | Gmail 429 | rate_limited | Yes, exponential backoff |
 | Gmail 5xx | unknown/provider unavailable | Yes |
 | Network timeout after request was sent | unknown_outcome | Yes, duplicate possible |
@@ -1652,8 +1748,11 @@ user.email exists
 AND user.emailVerifiedAt exists
 AND reminder.status == ACTIVE
 AND alert.enabled == true
-AND notification schedule still matches alert schedule
+AND notification.scheduleVersion == alert.scheduleVersion
+AND notification.scheduledFor == alert.scheduledFor
 ```
+
+The atomic claim query should filter by current reminder/alert eligibility before leasing rows. The post-claim checks remain mandatory to close the race between claiming and sending.
 
 ---
 
@@ -1705,31 +1804,73 @@ Do not consume an attempt when the notification was not actually claimed/sent be
 
 ---
 
-## 16.4 Gmail daily budget
+## 16.4 Global Gmail sending budget
 
 Google documents a standard Gmail account daily send limit around 500 outgoing messages.
 
 Do not run Remindly at the absolute limit.
 
-Initial recommended application limit:
+Initial recommended total application limit:
 
 ```text
-350 reminder emails per rolling 24-hour window
+350 total Gmail API sends per rolling 24-hour window
 ```
 
-This leaves capacity for auth emails and operational uncertainty.
+This limit includes reminder emails and Supabase Auth emails. It leaves capacity for mailbox uncertainty and sends made outside Remindly.
 
-Before claiming a new batch:
+Create a provider-neutral `EmailSendAttempt` ledger, or equivalent durable aggregate, that records sanitized metadata for every Gmail send path:
 
 ```text
-count SENT reminder notifications over previous 24 hours
-remaining = budget - count
-claimLimit = min(PROCESSOR_BATCH_LIMIT, remaining)
+purpose: REMINDER | AUTH
+outcome: RESERVED | ACCEPTED | DEFINITE_FAILURE | UNKNOWN_OUTCOME
+attemptedAt
+providerMessageId (nullable)
+```
+
+Do not store recipient addresses, Auth tokens, subjects, or bodies in this budget ledger.
+
+Retain these operational rows for 30 days, then delete them with a versioned maintenance job. The retention window is long enough for quota/debugging review while keeping the ledger bounded and non-user-facing.
+
+Reserve capacity for Auth operations:
+
+```text
+TOTAL_DAILY_BUDGET = 350
+AUTH_RESERVE = 50
+REMINDER_CLAIM_CEILING = 300
+```
+
+Reminder processing stops claiming when either the reminder ceiling or total budget is exhausted. Auth sends may use the reserve but must fail closed when the total budget is exhausted. These are conservative application controls, not exact replicas of Gmail's mailbox quota calculation.
+
+Budget check and reservation must be atomic across reminder workers and Auth Hook requests. Use a short PostgreSQL transaction with one shared advisory-lock key, or an equivalent serialized budget primitive:
+
+```text
+begin transaction
+acquire Gmail-budget advisory transaction lock
+count RESERVED + ACCEPTED + UNKNOWN_OUTCOME attempts in rolling window
+validate total and per-purpose ceiling
+for reminder processing: claim due notification rows and insert one RESERVED EmailSendAttempt per claim in the same transaction
+for Auth: insert one RESERVED EmailSendAttempt
+commit
+call Gmail outside the transaction
+finalize each reservation as ACCEPTED, DEFINITE_FAILURE, or UNKNOWN_OUTCOME
+```
+
+Never hold a database transaction or advisory lock while making a network request. A recovery job converts stale `RESERVED` rows to `UNKNOWN_OUTCOME`, because a crashed function may have transmitted the request.
+
+Before claiming a new reminder batch:
+
+```text
+count all RESERVED, ACCEPTED, and UNKNOWN_OUTCOME Gmail attempts over previous 24 hours
+totalRemaining = TOTAL_DAILY_BUDGET - count
+reminderRemaining = REMINDER_CLAIM_CEILING - reminderCount
+claimLimit = min(PROCESSOR_BATCH_LIMIT, totalRemaining, reminderRemaining)
 ```
 
 If `remaining <= 0`, return a successful processor response with no claims and a sanitized quota state.
 
-This limit is a safety mechanism, not an exact mirror of Gmail's quota calculation.
+Count `RESERVED` and `UNKNOWN_OUTCOME` attempts against the budget because Gmail may have accepted them. Failed pre-request validation and connection failures proven to occur before request transmission may finalize as `DEFINITE_FAILURE` and stop consuming the application rolling budget.
+
+Add a circuit breaker that pauses Gmail calls after repeated `auth_revoked`, mailbox daily-limit, or configuration failures. The health state must be visible through protected operational diagnostics without exposing credentials or addresses.
 
 ---
 
@@ -1828,9 +1969,49 @@ select cron.schedule(
 
 Exact Vault/schema syntax should be checked against the active Supabase project when applied.
 
+`net.http_post` is asynchronous. A successful cron SQL execution proves only that PostgreSQL queued an HTTP request; it does not prove that Vercel returned 2xx or that notifications were processed.
+
 ---
 
-## 17.5 Remove GitHub scheduler
+## 17.5 Cron delivery observability
+
+The scheduled SQL must retain or expose the `pg_net` request ID. Operations must distinguish:
+
+```text
+cron job ran
+HTTP request was queued
+Vercel returned 2xx
+processor completed successfully
+```
+
+Add a `ProcessorRun` table, or equivalent durable heartbeat, written by the Vercel endpoint:
+
+```text
+runId
+startedAt
+completedAt
+status: RUNNING | SUCCEEDED | FAILED
+claimed
+sent
+failed
+recovered
+sanitizedFailureCode
+```
+
+Do not store recipient addresses, reminder content, request secrets, or provider payloads. Retain processor runs for 30 days through the same versioned operational cleanup job.
+
+Operational checks must detect:
+
+- no successful processor run for more than three expected intervals;
+- repeated non-2xx `pg_net` responses;
+- a run stuck in `RUNNING` beyond the processing lease;
+- repeated Gmail circuit-breaker activation.
+
+The deployment runbook must include SQL for inspecting cron history and `pg_net` responses, rotating the Vault scheduler secret, and disabling/unscheduling the job safely.
+
+---
+
+## 17.6 Remove GitHub scheduler
 
 After Supabase Cron is verified in production, remove or disable:
 
@@ -1893,6 +2074,26 @@ DIRECT_URL=postgresql://...pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 Update `prisma.config.ts` so migration commands use `DIRECT_URL` in deployed/serverless environments.
+
+Target configuration:
+
+```ts
+import 'dotenv/config';
+import { defineConfig, env } from 'prisma/config';
+
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
+  migrations: {
+    path: 'prisma/migrations',
+    seed: 'tsx prisma/seed.ts',
+  },
+  datasource: {
+    url: env('DIRECT_URL'),
+  },
+});
+```
+
+Application runtime code continues to initialize `PrismaPg` with `DATABASE_URL`. CI and migration jobs must define both variables and fail before deployment when either is missing.
 
 Do not run schema migrations through the transaction pooler.
 
@@ -2033,6 +2234,7 @@ NODE_ENV=production
 # Supabase browser/SSR auth
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
 
 # Prisma/Supabase PostgreSQL
 DATABASE_URL=postgresql://...:6543/postgres
@@ -2050,7 +2252,10 @@ GMAIL_CLIENT_SECRET=...
 GMAIL_REFRESH_TOKEN=...
 GMAIL_SENDER_EMAIL=remindly.notifications@gmail.com
 GMAIL_SENDER_NAME=Remindly
-GMAIL_REMINDER_DAILY_BUDGET=350
+GMAIL_TOTAL_DAILY_BUDGET=350
+GMAIL_AUTH_RESERVE=50
+GMAIL_REQUEST_TIMEOUT_MS=10000
+GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS=4000
 ```
 
 ---
@@ -2064,6 +2269,7 @@ The following must never reach the browser bundle:
 ```text
 DATABASE_URL
 DIRECT_URL
+SUPABASE_SECRET_KEY
 SCHEDULER_SECRET
 SUPABASE_SEND_EMAIL_HOOK_SECRET
 GMAIL_CLIENT_SECRET
@@ -2071,6 +2277,8 @@ GMAIL_REFRESH_TOKEN
 ```
 
 Vercel environment values are encrypted at rest, but project members with adequate access may be able to inspect/manage them. Restrict project access accordingly.
+
+`SUPABASE_SECRET_KEY` is used only by a server-only Supabase admin client for deleting the currently authenticated account and running explicit administrative repair operations. Never use that client for ordinary request data access, and never import it into Client Components, Proxy, or browser bundles. Legacy projects may expose an equivalent `service_role` key; use the current project-provided secret-key form when available.
 
 Changing Vercel environment variables requires a new deployment for the new values to apply to deployment functions.
 
@@ -2161,7 +2369,9 @@ Delete only after dependent code/tests have been migrated.
 ```text
 src/lib/supabase/client.ts
 src/lib/supabase/server.ts
-src/lib/supabase/middleware.ts
+src/lib/supabase/proxy.ts
+src/lib/supabase/admin.ts
+src/proxy.ts
 
 src/server/auth/require-user.ts
 
@@ -2187,7 +2397,6 @@ infra/supabase/002-cron-notification-processor.sql
 ## Refactor heavily
 
 ```text
-src/middleware.ts
 src/lib/env.ts
 src/server/notifications/processor.ts
 src/server/notifications/repository.ts
