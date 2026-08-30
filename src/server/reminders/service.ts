@@ -100,24 +100,47 @@ function requireActiveTransition(count: number): void {
 }
 
 export class ReminderService {
-  getReminderWithHistory(id: string): Promise<ReminderWithNotifications> {
+  getReminderWithHistory(userIdOrId: string, maybeId?: string): Promise<ReminderWithNotifications> {
+    const userId = maybeId ? userIdOrId : undefined;
+    const id = maybeId ?? userIdOrId;
     return withTransaction(async (tx) => {
-      const reminder = await new ReminderRepository(tx).findByIdWithNotifications(id);
+      const reminders = new ReminderRepository(tx);
+      const reminder = userId
+        ? await reminders.findByIdWithNotifications(userId, id)
+        : await reminders.findByIdWithNotifications(id);
       if (!reminder) throw new ReminderLifecycleError('Reminder not found');
       return reminder;
     });
   }
 
-  createReminder(input: CreateReminderInput, now: Date): Promise<ReminderCycle> {
+  createReminder(
+    userIdOrInput: string | CreateReminderInput,
+    inputOrNow: CreateReminderInput | Date,
+    maybeNow?: Date,
+  ): Promise<ReminderCycle> {
+    const userId = typeof userIdOrInput === 'string' ? userIdOrInput : undefined;
+    const input = typeof userIdOrInput === 'string' ? inputOrNow as CreateReminderInput : userIdOrInput;
+    const now = typeof userIdOrInput === 'string' ? maybeNow! : inputOrNow as Date;
     void now;
-    return withTransaction(async (tx) => this.createCycle(tx, input));
+    return withTransaction(async (tx) => this.createCycle(tx, userId, input));
   }
 
-  updateReminder(id: string, patch: UpdateReminderInput, now: Date): Promise<ReminderMutationResult> {
+  updateReminder(
+    userIdOrId: string,
+    idOrPatch: string | UpdateReminderInput,
+    patchOrNow: UpdateReminderInput | Date,
+    maybeNow?: Date,
+  ): Promise<ReminderMutationResult> {
+    const userId = typeof idOrPatch === 'string' ? userIdOrId : undefined;
+    const id = typeof idOrPatch === 'string' ? idOrPatch : userIdOrId;
+    const patch = typeof idOrPatch === 'string' ? patchOrNow as UpdateReminderInput : idOrPatch;
+    const now = typeof idOrPatch === 'string' ? maybeNow! : patchOrNow as Date;
     void now;
     return withTransaction(async (tx) => {
       const reminders = new ReminderRepository(tx);
-      const current = requireReminder(await reminders.findById(id));
+      const current = requireReminder(userId
+        ? await reminders.findById(userId, id)
+        : await reminders.findById(id));
       assertEditable(current);
 
       const merged: CreateReminderInput = {
@@ -131,7 +154,19 @@ export class ReminderService {
       const scheduleChanged = next.validated.endDate !== dateOnly(current.endDate)
         || next.validated.leadDays !== current.alertLeadDays
         || next.validated.alertTime !== current.alertTime;
-      requireActiveTransition(await reminders.updateWhenStatus(id, ['ACTIVE'], {
+      requireActiveTransition(await (userId
+        ? reminders.updateWhenStatus(userId, id, ['ACTIVE'], {
+          name: next.validated.name,
+          ...(scheduleChanged
+            ? {
+                endDate: toDatabaseDate(next.validated.endDate),
+                alertLeadDays: next.validated.leadDays,
+                alertTime: next.validated.alertTime,
+                alertAt: next.alertAt,
+              }
+            : {}),
+        })
+        : reminders.updateWhenStatus(id, ['ACTIVE'], {
         name: next.validated.name,
         ...(scheduleChanged
           ? {
@@ -141,7 +176,7 @@ export class ReminderService {
               alertAt: next.alertAt,
           }
           : {}),
-      }));
+          }))); 
 
       let notification;
       if (scheduleChanged) {
@@ -151,45 +186,76 @@ export class ReminderService {
         notification = await new NotificationRepository(tx).findForReminderSchedule(current.id, current.alertAt);
       }
       return {
-        reminder: requireReminder(await reminders.findById(id)),
+        reminder: requireReminder(userId
+          ? await reminders.findById(userId, id)
+          : await reminders.findById(id)),
         notification,
       };
     });
   }
 
-  completeReminder(id: string, now: Date): Promise<Reminder> {
+  completeReminder(userIdOrId: string, idOrNow: string | Date, maybeNow?: Date): Promise<Reminder> {
+    const userId = typeof idOrNow === 'string' ? userIdOrId : undefined;
+    const id = typeof idOrNow === 'string' ? idOrNow : userIdOrId;
+    const now = typeof idOrNow === 'string' ? maybeNow! : idOrNow;
     return withTransaction(async (tx) => {
       const reminders = new ReminderRepository(tx);
-      const current = requireReminder(await reminders.findById(id));
+      const current = requireReminder(userId
+        ? await reminders.findById(userId, id)
+        : await reminders.findById(id));
       assertCompletable(current);
-      requireActiveTransition(await reminders.updateWhenStatus(id, ['ACTIVE'], {
+      requireActiveTransition(await (userId
+        ? reminders.updateWhenStatus(userId, id, ['ACTIVE'], {
+          status: 'DONE',
+          completedAt: now,
+        })
+        : reminders.updateWhenStatus(id, ['ACTIVE'], {
         status: 'DONE',
         completedAt: now,
-      }));
+        })));
       await cancelPendingEmailNotifications(tx, id);
-      return requireReminder(await reminders.findById(id));
+      return requireReminder(userId
+        ? await reminders.findById(userId, id)
+        : await reminders.findById(id));
     });
   }
 
-  renewReminder(id: string, input: RenewalInput, now: Date): Promise<ReminderCycle> {
+  renewReminder(
+    userIdOrId: string,
+    idOrInput: string | RenewalInput,
+    inputOrNow: RenewalInput | Date,
+    maybeNow?: Date,
+  ): Promise<ReminderCycle> {
+    const userId = typeof idOrInput === 'string' ? userIdOrId : undefined;
+    const id = typeof idOrInput === 'string' ? idOrInput : userIdOrId;
+    const input = typeof idOrInput === 'string' ? inputOrNow as RenewalInput : idOrInput;
+    const now = typeof idOrInput === 'string' ? maybeNow! : inputOrNow as Date;
     void now;
     return withTransaction(async (tx) => {
       const reminders = new ReminderRepository(tx);
-      const source = requireReminder(await reminders.findById(id));
+      const source = requireReminder(userId
+        ? await reminders.findById(userId, id)
+        : await reminders.findById(id));
       assertRenewable(source);
-      requireActiveTransition(await reminders.updateWhenStatus(source.id, [source.status], {
+      requireActiveTransition(await (userId
+        ? reminders.updateWhenStatus(userId, source.id, [source.status], {
+          status: 'ARCHIVED',
+        })
+        : reminders.updateWhenStatus(source.id, [source.status], {
         status: 'ARCHIVED',
-      }));
+        })));
       await cancelPendingEmailNotifications(tx, source.id);
-      return this.createCycle(tx, input, source.id);
+      return this.createCycle(tx, userId, input, source.id);
     });
   }
 
-  listActiveReminders(now: Date): Promise<ReminderListItem[]> {
+  listActiveReminders(userIdOrNow: string | Date, maybeNow?: Date): Promise<ReminderListItem[]> {
+    const userId = typeof userIdOrNow === 'string' ? userIdOrNow : undefined;
+    const now = typeof userIdOrNow === 'string' ? maybeNow! : userIdOrNow;
     return withTransaction(async (tx) => {
       const [timezone, reminders] = await Promise.all([
         new SettingsRepository(tx).getSingleton().then(configuredTimezone),
-        new ReminderRepository(tx).listActive(),
+        new ReminderRepository(tx).listActive(userId),
       ]);
       const currentNotifications = await new NotificationRepository(tx).findCurrentForReminders(reminders);
       const notificationBySchedule = new Map(currentNotifications.map((notification) => [
@@ -218,19 +284,21 @@ export class ReminderService {
 
   private async createCycle(
     tx: Prisma.TransactionClient,
+    userId: string | undefined,
     input: CreateReminderInput,
     parentReminderId?: string,
   ): Promise<ReminderCycle> {
     const timezone = configuredTimezone(await new SettingsRepository(tx).getSingleton());
     const next = schedule(input, timezone);
-    const reminder = await new ReminderRepository(tx).create({
+    const reminderInput = {
       name: next.validated.name,
       endDate: toDatabaseDate(next.validated.endDate),
       alertLeadDays: next.validated.leadDays,
       alertTime: next.validated.alertTime,
       alertAt: next.alertAt,
       ...(parentReminderId ? { parentReminderId } : {}),
-    });
+    };
+    const reminder = await new ReminderRepository(tx).create(userId ? userId : reminderInput, userId ? reminderInput : undefined);
     const notification = await createPendingEmailNotification(tx, reminder.id, reminder.alertAt);
     return { reminder, notification };
   }

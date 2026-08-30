@@ -23,48 +23,72 @@ export interface UpdateReminderRecord {
 export class ReminderRepository {
   constructor(private readonly db: ReminderDatabase) {}
 
-  findById(id: string): Promise<Reminder | null> {
-    return this.db.reminder.findUnique({ where: { id } });
+  findById(userIdOrId: string, id?: string): Promise<Reminder | null> {
+    return this.db.reminder.findFirst({ where: id ? { id, userId: userIdOrId } : { id: userIdOrId } });
   }
 
-  findByIdWithNotifications(id: string): Promise<ReminderWithNotifications | null> {
-    return this.db.reminder.findUnique({
-      where: { id },
+  findByIdWithNotifications(userIdOrId: string, id?: string): Promise<ReminderWithNotifications | null> {
+    return this.db.reminder.findFirst({
+      where: id ? { id, userId: userIdOrId } : { id: userIdOrId },
       include: { notifications: { orderBy: [{ scheduledFor: 'desc' }, { createdAt: 'desc' }] } },
     });
   }
 
-  listActive(): Promise<Reminder[]> {
+  listActive(userId?: string): Promise<Reminder[]> {
     return this.db.reminder.findMany({
-      where: { status: 'ACTIVE' },
+      where: userId ? { userId, status: 'ACTIVE' } : { status: 'ACTIVE' },
       orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
-  create(input: CreateReminderRecord): Promise<Reminder> {
-    return this.db.reminder.create({ data: input });
+  create(userIdOrInput: string | CreateReminderRecord, maybeInput?: CreateReminderRecord): Promise<Reminder> {
+    const userId = typeof userIdOrInput === 'string' ? userIdOrInput : undefined;
+    const input = typeof userIdOrInput === 'string' ? maybeInput! : userIdOrInput;
+    return this.db.reminder.create({ data: { ...input, ...(userId ? { userId } : {}) } });
   }
 
-  update(id: string, patch: UpdateReminderRecord): Promise<Reminder> {
-    return this.db.reminder.update({ where: { id }, data: patch });
+  update(userIdOrId: string, idOrPatch: string | UpdateReminderRecord, maybePatch?: UpdateReminderRecord): Promise<Reminder> {
+    const userId = typeof idOrPatch === 'string' ? userIdOrId : undefined;
+    const id = typeof idOrPatch === 'string' ? idOrPatch : userIdOrId;
+    const patch = typeof idOrPatch === 'string' ? maybePatch! : idOrPatch;
+    return this.db.reminder.updateMany({ where: userId ? { id, userId } : { id }, data: patch }).then(async (result) => {
+      if (result.count !== 1) throw new Error('Reminder not found');
+      return this.db.reminder.findFirstOrThrow({ where: userId ? { id, userId } : { id } });
+    });
   }
 
   async updateWhenStatus(
-    id: string,
-    expectedStatuses: ReminderStatus[],
-    patch: Prisma.ReminderUpdateManyMutationInput,
+    userIdOrId: string,
+    idOrStatuses: string | ReminderStatus[],
+    statusesOrPatch: ReminderStatus[] | Prisma.ReminderUpdateManyMutationInput,
+    maybePatch?: Prisma.ReminderUpdateManyMutationInput,
   ): Promise<number> {
+    const userId = typeof idOrStatuses === 'string' ? userIdOrId : undefined;
+    const id = typeof idOrStatuses === 'string' ? idOrStatuses : userIdOrId;
+    const expectedStatuses = (typeof idOrStatuses === 'string' ? statusesOrPatch : idOrStatuses) as ReminderStatus[];
+    const patch = (maybePatch ?? statusesOrPatch) as Prisma.ReminderUpdateManyMutationInput;
     const result = await this.db.reminder.updateMany({
-      where: { id, status: { in: expectedStatuses } },
+      where: { id, ...(userId ? { userId } : {}), status: { in: expectedStatuses } },
       data: patch,
     });
     return result.count;
   }
 
-  setStatus(id: string, status: ReminderStatus, completedAt?: Date | null): Promise<Reminder> {
-    return this.db.reminder.update({
-      where: { id },
+  async setStatus(
+    userIdOrId: string,
+    idOrStatus: string | ReminderStatus,
+    statusOrCompletedAt?: ReminderStatus | Date | null,
+    maybeCompletedAt?: Date | null,
+  ): Promise<Reminder> {
+    const userId = typeof idOrStatus === 'string' ? userIdOrId : undefined;
+    const id = typeof idOrStatus === 'string' ? idOrStatus : userIdOrId;
+    const status = (typeof idOrStatus === 'string' ? statusOrCompletedAt : idOrStatus) as ReminderStatus;
+    const completedAt = (typeof idOrStatus === 'string' ? maybeCompletedAt : statusOrCompletedAt) as Date | null | undefined;
+    const result = await this.db.reminder.updateMany({
+      where: userId ? { id, userId } : { id },
       data: { status, ...(completedAt === undefined ? {} : { completedAt }) },
     });
+    if (result.count !== 1) throw new Error('Reminder not found');
+    return this.db.reminder.findFirstOrThrow({ where: userId ? { id, userId } : { id } });
   }
 }
