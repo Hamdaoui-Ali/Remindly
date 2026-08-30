@@ -81,7 +81,14 @@ export interface ClaimedNotification extends Notification {
 }
 
 export type NotificationWithReminder = Prisma.NotificationGetPayload<{
-  include: { reminder: true };
+  include: {
+    reminder: true;
+    alert: {
+      include: {
+        reminder: { include: { userProfile: true } };
+      };
+    };
+  };
 }>;
 
 /**
@@ -222,7 +229,14 @@ export class NotificationRepository {
   findClaimedWithReminder(id: string): Promise<NotificationWithReminder | null> {
     return this.db.notification.findUnique({
       where: { id },
-      include: { reminder: true },
+      include: {
+        reminder: true,
+        alert: {
+          include: {
+            reminder: { include: { userProfile: true } },
+          },
+        },
+      },
     });
   }
 
