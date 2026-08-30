@@ -21,10 +21,9 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 
    ```powershell
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-   node -e "console.log(require('bcryptjs').hashSync('replace-with-a-strong-password', 12))"
    ```
 
-   Use separate random values for `AUTH_SECRET` and `SCHEDULER_SECRET`. Store only the bcrypt output in `OWNER_PASSWORD_HASH`; never commit the plaintext owner password. `RESEND_FROM` must be a sender identity verified in the Resend account.
+   `SCHEDULER_SECRET` protects the internal processor endpoint. `RESEND_FROM` is retained only for the legacy notification path and must be a sender identity verified in the configured provider.
 
 3. Start PostgreSQL and wait for it to become healthy:
 
@@ -54,7 +53,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 
    `npm run dev` keeps both processes in one terminal. Keep that terminal running for email reminders. Use `npm run dev:web` only when intentionally developing without automatic email processing.
 
-   Open `http://localhost:3000/login` and sign in with `OWNER_EMAIL` and the plaintext password that produced `OWNER_PASSWORD_HASH`.
+   Open `http://localhost:3000/login` and sign in with a Supabase Auth account. Registration and recovery pages are implemented in the next Auth-flow slice.
 
 ## Verification
 
@@ -126,4 +125,4 @@ The local worker attempts due processing every 30 seconds, so Remindly normally 
 
 ## Production environment
 
-Deploy the Next.js application as one service with managed PostgreSQL. Required server-only values are documented in `.env.example`. Keep `AUTH_SECRET`, `OWNER_PASSWORD_HASH`, `SCHEDULER_SECRET`, `RESEND_API_KEY`, `DATABASE_URL`, and `DIRECT_URL` in the deployment platform's encrypted secret store. For Supabase, use the pooled connection for `DATABASE_URL` and the direct/session connection for `DIRECT_URL`. Set both `APP_URL` and `NEXTAUTH_URL` to the canonical HTTPS origin.
+Deploy the Next.js application as one service with managed PostgreSQL. Required server-only values are documented in `.env.example`. Keep `SUPABASE_SECRET_KEY`, `SCHEDULER_SECRET`, `RESEND_API_KEY`, `DATABASE_URL`, and `DIRECT_URL` in the deployment platform's encrypted secret store. For Supabase, use the pooled connection for `DATABASE_URL` and the direct/session connection for `DIRECT_URL`. Set `APP_URL` to the canonical HTTPS origin.
