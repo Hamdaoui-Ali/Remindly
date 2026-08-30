@@ -90,6 +90,31 @@ The default Vitest script runs serially to avoid contention between integration 
 
 ## Operations contract
 
+### Supabase profile synchronization
+
+Apply `infra/supabase/001-profile-sync.sql` only in the hosted Supabase SQL
+editor or a Supabase migration. It creates the Auth profile triggers and the
+foreign-key cascade from `auth.users` to application-owned profile data. Do
+not apply it to the local Docker database because `auth.users` is managed by
+Supabase.
+
+Profile reconciliation is read-only by default:
+
+```powershell
+npm run profiles:reconcile
+```
+
+Review the sanitized counts and orphan profile UUIDs, then explicitly apply
+missing/stale profile repairs with:
+
+```powershell
+npm run profiles:reconcile -- --apply
+```
+
+The command never logs profile email addresses. It preserves existing
+timezone and default-alert preferences when repairing email or verification
+metadata. Keep the default dry-run for scheduled audits.
+
 ### Health
 
 `GET /api/health` is public so infrastructure can check readiness. A healthy database returns HTTP 200:

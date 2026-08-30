@@ -3467,6 +3467,11 @@ The settings API and UI expose the verified Supabase account email, timezone, an
 
 The schema is still transitional. `Reminder.userId` remains nullable until the profile synchronization trigger is deployed and existing reminders are backfilled. The legacy singleton and provider remain only for compatibility with the not-yet-migrated processor and historical test fixtures.
 
+The hosted profile SQL now uses the Auth foreign key as the single deletion
+authority. The versioned reconciliation runner is `npm run profiles:reconcile`;
+it defaults to dry-run, reports only counts and orphan profile UUIDs, and
+requires the explicit `--apply` flag for missing/stale profile repairs.
+
 Focused verification for this slice:
 
 ```text
