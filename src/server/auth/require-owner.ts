@@ -1,16 +1,10 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
+import { requireUser } from '@/server/auth/require-user';
 
-import { serverEnv } from '@/lib/env';
-import { getAuthOptions } from '@/server/auth/config';
-
-export async function requireOwner(): Promise<{ email: string }> {
-  const session = await getServerSession(getAuthOptions());
-  const ownerEmail = serverEnv().OWNER_EMAIL;
-
-  if (session?.user?.email !== ownerEmail) {
-    redirect('/login');
-  }
-
-  return { email: ownerEmail };
+/**
+ * Temporary compatibility name for existing repositories and route handlers.
+ * The returned identity is already validated by Supabase Auth; this alias is
+ * removed when the ownership-aware repository APIs land.
+ */
+export async function requireOwner() {
+  return requireUser();
 }
