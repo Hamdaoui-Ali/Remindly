@@ -5,21 +5,28 @@ import {
   createPendingEmailNotification,
 } from '@/server/notifications/ledger';
 import { NotificationRepository } from '@/server/notifications/repository';
+import { cancelObsoleteUnsentNotifications, createAlertsWithNotifications } from './alert-repository';
+import { resolveReminderAlerts } from './alerts';
 import { ProfileRepository } from '@/server/profile/repository';
 import { SettingsRepository } from '@/server/settings/repository';
 import { calendarDayDifference } from '@/server/urgency/calendar';
 import { calculateAlertAt } from '@/server/urgency/scheduling';
 import { calculateUrgency } from '@/server/urgency/urgency';
-import { reminderInputSchema } from '@/server/validation/reminders';
+import { multiAlertReminderInputSchema, reminderInputSchema } from '@/server/validation/reminders';
 import { ReminderRepository } from './repository';
 import type {
   CreateReminderInput,
+  LegacyCreateReminderInput,
+  LegacyUpdateReminderInput,
   ReminderCycle,
   ReminderListItem,
   ReminderMutationResult,
+  ReminderWithAlerts,
   ReminderWithNotifications,
   RenewalInput,
   UpdateReminderInput,
+  MultiAlertReminderInput,
+  MultiAlertUpdateReminderInput,
 } from './types';
 
 export class ReminderLifecycleError extends Error {
@@ -47,7 +54,7 @@ function configuredTimezone(settings: { timezone: string } | null): string {
   return settings.timezone;
 }
 
-function validInput(input: CreateReminderInput) {
+function validInput(input: LegacyCreateReminderInput) {
   return reminderInputSchema.parse({
     name: input.name,
     endDate: input.endDate,
@@ -56,7 +63,15 @@ function validInput(input: CreateReminderInput) {
   });
 }
 
-function schedule(input: CreateReminderInput, timezone: string) {
+function isMultiAlertInput(input: CreateReminderInput): input is MultiAlertReminderInput {
+  return 'dueAt' in input && 'alerts' in input;
+}
+
+function isMultiAlertPatch(input: UpdateReminderInput): input is MultiAlertUpdateReminderInput {
+  return 'dueAt' in input || 'alerts' in input;
+}
+
+function schedule(input: LegacyCreateReminderInput, timezone: string) {
   const validated = validInput(input);
   return {
     validated,
@@ -92,6 +107,11 @@ function assertRenewable(reminder: Reminder): void {
 }
 
 function requireReminder(reminder: Reminder | null): Reminder {
+  if (!reminder) throw new ReminderLifecycleError('Reminder not found');
+  return reminder;
+}
+
+function requireReminderWithAlerts(reminder: ReminderWithAlerts | null): ReminderWithAlerts {
   if (!reminder) throw new ReminderLifecycleError('Reminder not found');
   return reminder;
 }
@@ -138,6 +158,10 @@ export class ReminderService {
     const now = typeof idOrPatch === 'string' ? maybeNow! : patchOrNow as Date;
     void now;
     return withTransaction(async (tx) => {
+      if (isMultiAlertPatch(patch)) {
+        return this.updateMultiAlertReminder(tx, userId, id, patch);
+      }
+      const legacyPatch = patch as LegacyUpdateReminderInput;
       const reminders = new ReminderRepository(tx);
       const current = requireReminder(userId
         ? await reminders.findById(userId, id)
@@ -145,10 +169,10 @@ export class ReminderService {
       assertEditable(current);
 
       const merged: CreateReminderInput = {
-        name: patch.name ?? current.name,
-        endDate: patch.endDate ?? dateOnly(current.endDate),
-        leadDays: patch.leadDays ?? current.alertLeadDays as CreateReminderInput['leadDays'],
-        alertTime: patch.alertTime ?? current.alertTime,
+        name: legacyPatch.name ?? current.name,
+        endDate: legacyPatch.endDate ?? dateOnly(current.endDate),
+        leadDays: legacyPatch.leadDays ?? current.alertLeadDays,
+        alertTime: legacyPatch.alertTime ?? current.alertTime,
       };
       const timezone = configuredTimezone(userId
         ? await new ProfileRepository(tx).findById(userId)
@@ -293,6 +317,9 @@ export class ReminderService {
     input: CreateReminderInput,
     parentReminderId?: string,
   ): Promise<ReminderCycle> {
+    if (isMultiAlertInput(input)) {
+      return this.createMultiAlertCycle(tx, userId, input, parentReminderId);
+    }
     const timezone = configuredTimezone(userId
       ? await new ProfileRepository(tx).findById(userId)
       : await new SettingsRepository(tx).getSingleton());
@@ -308,5 +335,99 @@ export class ReminderService {
     const reminder = await new ReminderRepository(tx).create(userId ? userId : reminderInput, userId ? reminderInput : undefined);
     const notification = await createPendingEmailNotification(tx, reminder.id, reminder.alertAt);
     return { reminder, notification };
+  }
+
+  private async createMultiAlertCycle(
+    tx: Prisma.TransactionClient,
+    userId: string | undefined,
+    input: MultiAlertReminderInput,
+    parentReminderId?: string,
+  ): Promise<ReminderCycle> {
+    const timezone = configuredTimezone(userId
+      ? await new ProfileRepository(tx).findById(userId)
+      : await new SettingsRepository(tx).getSingleton());
+    const validated = multiAlertReminderInputSchema.parse(input);
+    const dueAt = new Date(validated.dueAt);
+    const resolvedAlerts = resolveReminderAlerts(dueAt, validated.alerts, timezone);
+    const firstAlert = resolvedAlerts[0];
+    if (!firstAlert) throw new ReminderLifecycleError('A reminder requires at least one alert');
+    const reminderInput = {
+      name: validated.name,
+      dueAt,
+      endDate: toDatabaseDate(dateOnly(dueAt)),
+      alertLeadDays: 0,
+      alertTime: dueAt.toISOString().slice(11, 16),
+      alertAt: firstAlert.scheduledFor,
+      ...(parentReminderId ? { parentReminderId } : {}),
+    };
+    const reminder = await new ReminderRepository(tx).create(
+      userId ? userId : reminderInput,
+      userId ? reminderInput : undefined,
+    );
+    const ledger = await createAlertsWithNotifications(tx, reminder.id, resolvedAlerts);
+    const notification = ledger.notifications[0];
+    if (!notification) throw new ReminderLifecycleError('A reminder requires at least one notification');
+    return { reminder, notification, ...ledger };
+  }
+
+  private async updateMultiAlertReminder(
+    tx: Prisma.TransactionClient,
+    userId: string | undefined,
+    id: string,
+    patch: MultiAlertUpdateReminderInput,
+  ): Promise<ReminderMutationResult> {
+    const reminders = new ReminderRepository(tx);
+    const current = requireReminderWithAlerts(await reminders.findByIdWithAlerts(userId ?? id, userId ? id : undefined));
+    assertEditable(current);
+    if (!current.dueAt) throw new ReminderLifecycleError('Reminder deadline is not migrated');
+    const timezone = configuredTimezone(userId
+      ? await new ProfileRepository(tx).findById(userId)
+      : await new SettingsRepository(tx).getSingleton());
+    const dueAt = patch.dueAt ? new Date(patch.dueAt) : current.dueAt;
+    const alertInputs = patch.alerts ?? current.alerts.map((alert) => alert.offsetMinutes === null
+      ? { kind: 'absolute' as const, scheduledFor: alert.scheduledFor.toISOString() }
+      : { kind: 'offset' as const, offsetMinutes: alert.offsetMinutes });
+    const resolvedAlerts = resolveReminderAlerts(dueAt, alertInputs, timezone);
+    const firstAlert = resolvedAlerts[0];
+    if (!firstAlert) throw new ReminderLifecycleError('A reminder requires at least one alert');
+
+    const currentBySchedule = new Map(current.alerts.map((alert) => [
+      `${alert.scheduledFor.getTime()}:${alert.channel}`,
+      alert,
+    ]));
+    const retainedIds = new Set<string>();
+    for (const resolved of resolvedAlerts) {
+      const existing = currentBySchedule.get(`${resolved.scheduledFor.getTime()}:EMAIL`);
+      if (existing && existing.offsetMinutes === resolved.offsetMinutes) {
+        retainedIds.add(existing.id);
+      }
+    }
+    const obsoleteIds = current.alerts.filter((alert) => !retainedIds.has(alert.id)).map((alert) => alert.id);
+    if (obsoleteIds.length > 0) {
+      await cancelObsoleteUnsentNotifications(tx, obsoleteIds);
+      await tx.reminderAlert.updateMany({
+        where: { id: { in: obsoleteIds } },
+        data: { enabled: false },
+      });
+    }
+    const newAlerts = resolvedAlerts.filter((resolved) => !retainedIds.has(
+      currentBySchedule.get(`${resolved.scheduledFor.getTime()}:EMAIL`)?.id ?? '',
+    ));
+    const ledger = await createAlertsWithNotifications(tx, id, newAlerts);
+    const updateData = {
+      name: patch.name ?? current.name,
+      dueAt,
+      endDate: toDatabaseDate(dateOnly(dueAt)),
+      alertLeadDays: 0,
+      alertTime: dueAt.toISOString().slice(11, 16),
+      alertAt: firstAlert.scheduledFor,
+    };
+    await (userId
+      ? reminders.updateWhenStatus(userId, id, ['ACTIVE'], updateData)
+      : reminders.updateWhenStatus(id, ['ACTIVE'], updateData));
+    const reminder = requireReminder(await reminders.findById(userId ?? id, userId ? id : undefined));
+    const notification = ledger.notifications[0]
+      ?? await new NotificationRepository(tx).findForReminderSchedule(reminder.id, firstAlert.scheduledFor);
+    return { reminder, notification, ...ledger };
   }
 }

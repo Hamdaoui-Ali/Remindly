@@ -1,4 +1,4 @@
-import type { Notification, Reminder, Settings } from '@/generated/prisma/client';
+import type { Notification, Reminder, Settings, UserProfile } from '@/generated/prisma/client';
 import {
   emailDeliveryOutcome,
   type EmailProvider,
@@ -9,6 +9,7 @@ import { SettingsRepository } from '@/server/settings/repository';
 import { calculateUrgency } from '@/server/urgency/urgency';
 import { reconcileMissingPendingNotifications } from './recovery';
 import { NotificationRepository, type ClaimedNotification } from './repository';
+import { isCurrentAlertEligible } from './eligibility';
 
 const MAXIMUM_ATTEMPTS = 5;
 const PROCESSING_LEASE_MILLISECONDS = 15 * 60 * 1_000;
@@ -59,11 +60,11 @@ function remindersUrl(): string {
 function buildReminderEmail(
   notification: Notification,
   reminder: Reminder,
-  settings: Settings,
+  recipient: { email: string; timezone: string },
   now: Date,
 ): SendEmailInput {
   const endDate = reminder.endDate.toISOString().slice(0, 10);
-  const urgency = urgencyLabel(calculateUrgency(endDate, now, settings.timezone));
+  const urgency = urgencyLabel(calculateUrgency(endDate, now, recipient.timezone));
   const scheduledContext = notification.scheduledFor.toISOString();
   const url = remindersUrl();
   const subject = `Remindly: ${reminder.name} is ${urgency.toLowerCase()}`;
@@ -84,7 +85,7 @@ function buildReminderEmail(
   ].join('');
 
   return {
-    to: settings.notificationEmail,
+    to: recipient.email,
     subject,
     html,
     text,
@@ -138,7 +139,6 @@ async function processClaimedNotification(
   }
   if (
     current.reminder.status !== 'ACTIVE'
-    || current.scheduledFor.getTime() !== current.reminder.alertAt.getTime()
   ) {
     await cancelClaim(repository, current.id, claimed.processingStartedAt);
     return 'cancelled';
@@ -146,8 +146,33 @@ async function processClaimedNotification(
 
   let email: SendEmailInput;
   try {
-    if (!settings) throw new Error('Notification settings are unavailable');
-    email = buildReminderEmail(current, current.reminder, settings, input.now);
+    if (current.alert) {
+      const profile = current.alert.reminder.userProfile;
+      if (!profile || !isCurrentAlertEligible({
+        reminderStatus: current.reminder.status,
+        alertEnabled: current.alert.enabled,
+        email: profile.email,
+        emailVerifiedAt: profile.emailVerifiedAt,
+        notificationScheduleVersion: current.scheduleVersion,
+        alertScheduleVersion: current.alert.scheduleVersion,
+        notificationScheduledFor: current.scheduledFor,
+        alertScheduledFor: current.alert.scheduledFor,
+      })) {
+        await cancelClaim(repository, current.id, claimed.processingStartedAt);
+        return 'cancelled';
+      }
+      email = buildReminderEmail(current, current.reminder, profile, input.now);
+    } else {
+      if (!settings) throw new Error('Notification settings are unavailable');
+      if (current.scheduledFor.getTime() !== current.reminder.alertAt.getTime()) {
+        await cancelClaim(repository, current.id, claimed.processingStartedAt);
+        return 'cancelled';
+      }
+      email = buildReminderEmail(current, current.reminder, {
+        email: settings.notificationEmail,
+        timezone: settings.timezone,
+      }, input.now);
+    }
   } catch {
     return failClaim(repository, claimed, input.now, PROCESSING_ERROR);
   }

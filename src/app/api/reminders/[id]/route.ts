@@ -2,7 +2,7 @@ import { jsonResponse } from '@/lib/http';
 import { requireUser } from '@/server/auth/require-user';
 import { presentReminderHistory, presentReminderMutation } from '@/server/reminders/presenters';
 import { ReminderService } from '@/server/reminders/service';
-import { reminderIdSchema, reminderPatchSchema } from '@/server/validation/reminders';
+import { multiAlertReminderPatchSchema, reminderIdSchema } from '@/server/validation/reminders';
 import { reminderRouteError } from '../errors';
 import { presentationTimezone } from '../presentation-timezone';
 
@@ -25,7 +25,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const user = await requireUser();
     const [routeParams, patch] = await Promise.all([
       context.params,
-      request.json().then((body) => reminderPatchSchema.parse(body)),
+      request.json().then((body) => multiAlertReminderPatchSchema.parse(body)),
     ]);
     const id = reminderIdSchema.parse(routeParams.id);
     const ownerTimezone = await presentationTimezone(user.id);

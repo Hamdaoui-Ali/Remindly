@@ -60,6 +60,7 @@ model UserProfile {
 model Reminder {
   id               String         @id @default(uuid()) @db.Uuid
   name             String
+  dueAt            DateTime?      @map("due_at") @db.Timestamptz(6)
   endDate          DateTime       @map("end_date") @db.Date
   alertLeadDays    Int            @map("alert_lead_days")
   alertTime        String         @map("alert_time")
@@ -78,6 +79,7 @@ model Reminder {
   alerts        ReminderAlert[]
 
   @@index([status, endDate])
+  @@index([status, dueAt])
   @@index([status, alertAt])
   @@index([parentReminderId])
   @@index([userId])

@@ -84,6 +84,20 @@ describe('RemindersPage', () => {
     expect(screen.getByText(/add your first deadline/i)).toBeVisible();
   });
 
+  it('adds and removes an alert row in the reminder editor', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: /add alert/i }));
+    expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(2);
+
+    const removeButtons = screen.getAllByRole('button', { name: /remove alert/i });
+    await user.click(removeButtons[1]!);
+    expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(1);
+  });
+
   it('validates required fields before sending a create request', async () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);

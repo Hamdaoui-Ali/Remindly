@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_REMINDER_ALERTS } from '@/server/reminders/alerts';
 import { isValidCalendarDate } from '@/server/urgency/calendar';
 import { MAX_ALERT_LEAD_DAYS } from '@/server/urgency/scheduling';
 
@@ -29,3 +30,20 @@ export const reminderPatchSchema = reminderFields.partial()
   .superRefine(validateEndDate);
 
 export const reminderIdSchema = z.string().uuid();
+
+const reminderTimestampSchema = z.string().datetime({ offset: true });
+const reminderAlertInputSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('offset'), offsetMinutes: z.number().int().positive() }),
+  z.object({ kind: z.literal('absolute'), scheduledFor: reminderTimestampSchema }),
+]);
+
+const multiAlertReminderFields = z.object({
+  name: z.string().trim().min(1).max(120),
+  dueAt: reminderTimestampSchema,
+  alerts: z.array(reminderAlertInputSchema).min(1).max(MAX_REMINDER_ALERTS),
+});
+
+export const multiAlertReminderInputSchema = multiAlertReminderFields;
+export const multiAlertReminderPatchSchema = multiAlertReminderFields
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });

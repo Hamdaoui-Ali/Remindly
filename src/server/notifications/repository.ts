@@ -81,7 +81,14 @@ export interface ClaimedNotification extends Notification {
 }
 
 export type NotificationWithReminder = Prisma.NotificationGetPayload<{
-  include: { reminder: true };
+  include: {
+    reminder: true;
+    alert: {
+      include: {
+        reminder: { include: { userProfile: true } };
+      };
+    };
+  };
 }>;
 
 /**
@@ -181,6 +188,22 @@ export class NotificationRepository {
         FROM notifications
         WHERE attempt_count < ${input.maximumAttempts}
           AND (
+            reminder_alert_id IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM reminder_alerts AS alert
+              JOIN reminders AS reminder ON reminder.id = alert.reminder_id
+              JOIN user_profiles AS profile ON profile.id = reminder.user_id
+              WHERE alert.id = notifications.reminder_alert_id
+                AND reminder.status = 'ACTIVE'::"ReminderStatus"
+                AND alert.enabled = TRUE
+                AND notifications.schedule_version = alert.schedule_version
+                AND notifications.scheduled_for = alert.scheduled_for
+                AND profile.email IS NOT NULL
+                AND profile.email_verified_at IS NOT NULL
+            )
+          )
+          AND (
             (status = ${input.pendingStatus}::"NotificationStatus" AND scheduled_for <= ${input.now})
             OR (status = ${input.failedStatus}::"NotificationStatus" AND next_attempt_at <= ${input.now})
             OR (
@@ -222,7 +245,14 @@ export class NotificationRepository {
   findClaimedWithReminder(id: string): Promise<NotificationWithReminder | null> {
     return this.db.notification.findUnique({
       where: { id },
-      include: { reminder: true },
+      include: {
+        reminder: true,
+        alert: {
+          include: {
+            reminder: { include: { userProfile: true } },
+          },
+        },
+      },
     });
   }
 
