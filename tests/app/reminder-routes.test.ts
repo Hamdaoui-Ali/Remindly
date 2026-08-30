@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { requireOwner } = vi.hoisted(() => ({
-  requireOwner: vi.fn(async () => ({ email: 'owner@example.com' })),
+const { requireUser } = vi.hoisted(() => ({
+  requireUser: vi.fn(async () => ({ id: 'user-a', email: 'owner@example.com' })),
 }));
 
-vi.mock('@/server/auth/require-owner', () => ({ requireOwner }));
+vi.mock('@/server/auth/require-user', () => ({ requireUser }));
 
 import { GET as getReminder, PATCH as patchReminder } from '@/app/api/reminders/[id]/route';
 import { POST as completeReminder } from '@/app/api/reminders/[id]/done/route';
@@ -19,7 +19,7 @@ const malformedContext = { params: Promise.resolve({ id: 'not-a-uuid' }) };
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  requireOwner.mockClear();
+  requireUser.mockClear();
 });
 
 describe('reminder route identifiers', () => {

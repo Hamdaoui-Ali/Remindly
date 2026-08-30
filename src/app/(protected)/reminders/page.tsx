@@ -1,23 +1,24 @@
 import { RemindersPage } from '@/components/reminders/reminders-page';
-import { prisma } from '@/server/db/client';
+import { requireUser } from '@/server/auth/require-user';
 import { presentReminderList } from '@/server/reminders/presenters';
 import { ReminderService } from '@/server/reminders/service';
-import { SettingsRepository } from '@/server/settings/repository';
+import { ProfileService } from '@/server/profile/service';
 
 export default async function RemindersRoutePage() {
+  const user = await requireUser();
   const service = new ReminderService();
   const [reminders, settings] = await Promise.all([
-    service.listActiveReminders(new Date()),
-    new SettingsRepository(prisma).getSingleton(),
+    service.listActiveReminders(user.id, new Date()),
+    new ProfileService().getSettings(user.id),
   ]);
-  const timezone = settings?.timezone ?? 'UTC';
+  const timezone = settings.timezone;
   const presentedReminders = presentReminderList(reminders, timezone);
 
   return (
     <RemindersPage
       key={presentedReminders.map((reminder) => `${reminder.id}:${reminder.endDate}:${reminder.name}`).join('|')}
       reminders={presentedReminders}
-      defaultAlertTime={settings?.defaultAlertTime ?? '09:00'}
+      defaultAlertTime={settings.defaultAlertTime}
       timezone={timezone}
     />
   );

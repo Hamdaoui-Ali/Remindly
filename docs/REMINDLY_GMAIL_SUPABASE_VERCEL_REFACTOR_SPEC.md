@@ -3424,15 +3424,56 @@ legacy reminder fields         retained for compatibility
 legacy notification fields     retained for compatibility
 ```
 
-The following target behaviors are not enabled by this migration and must be implemented in the next slices:
+The following target behaviors were added after this migration in the authenticated ownership slice:
 
-1. Create Supabase browser, server, and admin clients and make Supabase Auth the identity authority.
-2. Add the hosted Supabase SQL trigger that creates `public.user_profiles` from `auth.users`, plus the selected deletion policy and a repair/reconciliation job. This SQL is intentionally separate from the Prisma migration because the local PostgreSQL test database does not contain Supabase's managed `auth.users` schema.
-3. Replace `requireOwner` with authenticated `requireUser` ownership checks, add account deletion protection, and move Next.js 16 request protection to `src/proxy.ts` while keeping authorization in the data-access/API layer.
-4. Backfill `Reminder.userId`, make ownership non-null after the backfill gate passes, and migrate the existing one-alert model to `ReminderAlert` and versioned notifications.
-5. Implement Gmail provider delivery, Auth Hook delivery, the shared budget reservation, processor state machine, and Supabase Cron/`pg_net` observability.
+1. Supabase browser, server, and admin clients are present; user-facing authentication uses Supabase Auth.
+2. User-facing reminder, dashboard, and settings routes derive identity through `requireUser()` and pass the authenticated user ID into the application services.
+3. User-facing reminder repository queries and dashboard aggregates are scoped by user ID. User settings read/write the authenticated `UserProfile`, and the settings UI cannot configure an arbitrary notification destination.
+4. `DELETE /api/account` validates same-origin requests, requires an access token with an `auth_time` no older than ten minutes, and deletes only the authenticated Supabase user through the server-only admin client.
+
+The following target behaviors remain for the next slices:
+
+1. Deploy and rehearse the hosted Supabase SQL trigger that creates `public.user_profiles` from `auth.users`, plus the selected deletion policy and a repair/reconciliation job. This SQL remains separate from the Prisma migration because the local PostgreSQL test database does not contain Supabase's managed `auth.users` schema.
+2. Backfill `Reminder.userId`, make ownership non-null after the backfill gate passes, and remove the temporary repository/service compatibility overloads.
+3. Migrate the existing one-alert model to `ReminderAlert` and versioned notifications, including schedule-version race protection.
+4. Implement Gmail provider delivery, Auth Hook delivery, the shared budget reservation, processor state machine, and Supabase Cron/`pg_net` observability.
+
+The legacy singleton settings path, Resend provider, and compatibility test fixtures remain intentionally available until those later slices are complete. They are not used by the new authenticated user-facing routes.
 
 The migration is additive and was rehearsed against the isolated test database. Existing singleton settings and legacy reminder/notification rows remain readable. No Supabase Auth project, Gmail account, Vercel deployment, or paid service is required for this foundation slice.
+
+---
+
+## 38.2. Implementation checkpoint — authenticated ownership slice
+
+The second implementation slice is complete on branch `refacto`.
+
+Implemented boundaries:
+
+```text
+src/lib/supabase/admin.ts              server-only admin client
+src/server/auth/require-user.ts        server-validated identity
+src/app/api/account/route.ts           recent-auth account deletion
+src/server/profile/*                   user profile preferences
+src/server/reminders/repository.ts     authenticated ownership filters
+src/server/reminders/service.ts        trusted user ID propagation
+src/server/dashboard/queries.ts        user-scoped aggregate SQL
+src/app/api/**                         user ID derived from requireUser()
+```
+
+The account deletion endpoint is protected by an explicit `Origin` allow-list and a ten-minute JWT `auth_time` freshness check. It never accepts a target user ID from the request.
+
+The settings API and UI expose the verified Supabase account email, timezone, and default alert time. They no longer accept or return a free-form notification destination.
+
+The schema is still transitional. `Reminder.userId` remains nullable until the profile synchronization trigger is deployed and existing reminders are backfilled. The legacy singleton and provider remain only for compatibility with the not-yet-migrated processor and historical test fixtures.
+
+Focused verification for this slice:
+
+```text
+unit security/profile/ownership tests: passing
+npx tsc --noEmit: passing
+npm run lint -- --quiet: passing
+```
 
 ---
 

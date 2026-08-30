@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { prisma } from '@/server/db/client';
 import { SETTINGS_SINGLETON_ID } from '@/server/settings/repository';
 import { calendarDayDifference, getLocalDate } from '@/server/urgency/calendar';
@@ -102,11 +103,19 @@ function number(value: bigint | undefined): number {
   return Number(value ?? 0n);
 }
 
-export async function getDashboardData(now: Date, db: DashboardDatabase = prisma): Promise<DashboardData> {
-  const settings = await db.settings.findUnique({
-    where: { id: SETTINGS_SINGLETON_ID },
-    select: { timezone: true },
-  });
+export async function getDashboardData(
+  userIdOrNow: string | Date,
+  nowOrDb?: Date | DashboardDatabase,
+  maybeDb?: DashboardDatabase,
+): Promise<DashboardData> {
+  const userId = typeof userIdOrNow === 'string' ? userIdOrNow : undefined;
+  const now = typeof userIdOrNow === 'string' ? nowOrDb as Date : userIdOrNow;
+  const db = (typeof userIdOrNow === 'string' ? maybeDb : nowOrDb) as DashboardDatabase | undefined ?? prisma;
+  const reminderFilter = userId ? Prisma.sql`AND user_id = ${userId}::uuid` : Prisma.empty;
+  const joinedReminderFilter = userId ? Prisma.sql`AND reminder.user_id = ${userId}::uuid` : Prisma.empty;
+  const settings = userId
+    ? await db.userProfile.findUnique({ where: { id: userId }, select: { timezone: true } })
+    : await db.settings.findUnique({ where: { id: SETTINGS_SINGLETON_ID }, select: { timezone: true } });
   if (!settings) throw new Error('Dashboard settings are not configured');
 
   const timezone = settings.timezone;
@@ -132,11 +141,15 @@ export async function getDashboardData(now: Date, db: DashboardDatabase = prisma
         COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date > ${todayPlusThree}::date AND end_date <= ${todayPlusFourteen}::date)::bigint AS soon_count,
         COUNT(*) FILTER (WHERE status = 'ACTIVE' AND end_date > ${todayPlusFourteen}::date)::bigint AS safe_count
       FROM reminders
+      WHERE 1 = 1
+        ${reminderFilter}
     `,
     db.$queryRaw<SentRow[]>`
       SELECT COUNT(*)::bigint AS sent_count
       FROM notifications
+      INNER JOIN reminders AS reminder ON reminder.id = notifications.reminder_id
       WHERE status = 'SENT'
+        ${joinedReminderFilter}
         AND sent_at >= (${monthStart}::timestamp AT TIME ZONE ${timezone})
         AND sent_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
     `,
@@ -162,6 +175,7 @@ export async function getDashboardData(now: Date, db: DashboardDatabase = prisma
         LIMIT 1
       ) current_notification ON TRUE
       WHERE reminder.status = 'ACTIVE'
+        ${joinedReminderFilter}
         AND reminder.end_date <= ${todayPlusThirty}::date
       ORDER BY reminder.end_date ASC, reminder.created_at ASC
     `,
@@ -174,6 +188,7 @@ export async function getDashboardData(now: Date, db: DashboardDatabase = prisma
           0::bigint AS renewed
         FROM reminders
         WHERE status = 'DONE'
+          ${reminderFilter}
           AND completed_at >= (${historyStart}::timestamp AT TIME ZONE ${timezone})
           AND completed_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
         GROUP BY month_key
@@ -184,6 +199,7 @@ export async function getDashboardData(now: Date, db: DashboardDatabase = prisma
           COUNT(*)::bigint AS renewed
         FROM reminders
         WHERE parent_reminder_id IS NOT NULL
+          ${reminderFilter}
           AND created_at >= (${historyStart}::timestamp AT TIME ZONE ${timezone})
           AND created_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
         GROUP BY month_key
