@@ -1,13 +1,13 @@
 # Remindly
 
-Remindly is a private, single-owner deadline reminder application. It turns each reminder cycle into one durable notification record, shows urgency in the owner's timezone, and sends due email through a bounded, retry-safe processor.
+Remindly is a Supabase-authenticated deadline reminder application. It turns each reminder cycle into durable notification records, scopes data to the authenticated user's profile, shows urgency in that user's timezone, and sends due email through a bounded, retry-safe processor.
 
 ## Requirements
 
 - Node.js `^20.19`, `^22.12`, or `>=24.0.0` (the Prisma 7 requirement; Next.js alone supports `>=20.9.0`)
 - npm
 - Docker with Docker Compose, or another PostgreSQL instance
-- A Resend API key and verified sender identity for real email delivery
+- A PostgreSQL database for local development; Gmail delivery remains a later refactor slice
 
 ## Local setup
 
@@ -34,7 +34,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
 
    Compose stores data in the named `remindly-postgres-data` volume and checks readiness with `pg_isready`.
 
-4. Generate the Prisma client, apply migrations, and seed the singleton owner settings:
+4. Generate the Prisma client, apply migrations, and seed the legacy compatibility settings:
 
    ```powershell
    npx prisma validate
@@ -43,7 +43,7 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npx prisma db seed
    ```
 
-   The current `refacto` foundation migration is additive. It adds the Supabase-compatible profile, alert, schedule-version, and operational-ledger tables while the existing single-owner runtime remains active. The hosted Supabase Auth trigger and ownership backfill are intentionally separate follow-up migrations.
+   The current `refacto` migrations are additive. They add the Supabase-compatible profile, alert, schedule-version, and operational-ledger tables. Authenticated user-facing routes now use Supabase Auth and profile ownership; the hosted profile trigger and ownership backfill are intentionally separate follow-up migrations.
 
 5. Start Next.js and the 30-second local notification worker:
 
