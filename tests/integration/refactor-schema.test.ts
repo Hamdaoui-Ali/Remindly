@@ -147,4 +147,50 @@ describe('Supabase refactor schema', () => {
     expect(attempt.outcome).toBe('RESERVED');
     expect(run.status).toBe('RUNNING');
   });
+
+  it('keeps legacy settings and notification rows readable after migration', async () => {
+    await prisma.settings.upsert({
+      where: { id: 'singleton' },
+      create: {
+        id: 'singleton',
+        notificationEmail: 'owner@example.com',
+        timezone: 'Africa/Casablanca',
+        defaultAlertTime: '09:00',
+      },
+      update: {},
+    });
+
+    const name = `Legacy migration rehearsal ${crypto.randomUUID()}`;
+    const reminder = await prisma.reminder.create({
+      data: {
+        name,
+        endDate: new Date('2026-09-01'),
+        alertLeadDays: 3,
+        alertTime: '09:00',
+        alertAt: new Date('2026-08-29T08:00:00.000Z'),
+        status: 'ACTIVE',
+      },
+    });
+    createdReminderIds.push(reminder.id);
+
+    await prisma.notification.create({
+      data: {
+        reminderId: reminder.id,
+        scheduledFor: reminder.alertAt,
+        channel: 'EMAIL',
+        idempotencyKey: crypto.randomUUID(),
+        status: 'PENDING',
+      },
+    });
+
+    const legacySettings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+    const legacyReminder = await prisma.reminder.findUnique({
+      where: { id: reminder.id },
+      include: { notifications: true },
+    });
+
+    expect(legacySettings?.notificationEmail).toBe('owner@example.com');
+    expect(legacyReminder?.notifications).toHaveLength(1);
+    expect(legacyReminder?.userId).toBeNull();
+  });
 });
