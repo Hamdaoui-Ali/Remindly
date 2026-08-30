@@ -3399,6 +3399,43 @@ The final clause is a product-email requirement, not an OAuth-domain guarantee. 
 
 ---
 
+# 38.1. Implementation checkpoint — Supabase foundation
+
+The first implementation slice is complete on branch `refacto`.
+
+Migration applied:
+
+```text
+20260830213000_refactor_foundation
+```
+
+This slice deliberately preserves the current application while adding the database structures needed for the target architecture:
+
+```text
+UserProfile                    present; not yet synchronized with auth.users
+Reminder.userId                present and nullable during backfill
+ReminderAlert                  present
+Notification.reminderAlertId  present and nullable during transition
+Notification.scheduleVersion   present and nullable during transition
+EmailSendAttempt               present
+ProcessorRun                   present
+Settings                       retained for legacy single-owner behavior
+legacy reminder fields         retained for compatibility
+legacy notification fields     retained for compatibility
+```
+
+The following target behaviors are not enabled by this migration and must be implemented in the next slices:
+
+1. Create Supabase browser, server, and admin clients and make Supabase Auth the identity authority.
+2. Add the hosted Supabase SQL trigger that creates `public.user_profiles` from `auth.users`, plus the selected deletion policy and a repair/reconciliation job. This SQL is intentionally separate from the Prisma migration because the local PostgreSQL test database does not contain Supabase's managed `auth.users` schema.
+3. Replace `requireOwner` with authenticated `requireUser` ownership checks, add account deletion protection, and move Next.js 16 request protection to `src/proxy.ts` while keeping authorization in the data-access/API layer.
+4. Backfill `Reminder.userId`, make ownership non-null after the backfill gate passes, and migrate the existing one-alert model to `ReminderAlert` and versioned notifications.
+5. Implement Gmail provider delivery, Auth Hook delivery, the shared budget reservation, processor state machine, and Supabase Cron/`pg_net` observability.
+
+The migration is additive and was rehearsed against the isolated test database. Existing singleton settings and legacy reminder/notification rows remain readable. No Supabase Auth project, Gmail account, Vercel deployment, or paid service is required for this foundation slice.
+
+---
+
 # 39. Official References Consulted
 
 The following official documentation was used to validate this specification on 2026-08-30.

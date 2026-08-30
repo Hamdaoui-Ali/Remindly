@@ -44,6 +44,8 @@ Remindly is a private, single-owner deadline reminder application. It turns each
    npx prisma db seed
    ```
 
+   The current `refacto` foundation migration is additive. It adds the Supabase-compatible profile, alert, schedule-version, and operational-ledger tables while the existing single-owner runtime remains active. The hosted Supabase Auth trigger and ownership backfill are intentionally separate follow-up migrations.
+
 5. Start Next.js and the 30-second local notification worker:
 
    ```powershell
@@ -75,6 +77,8 @@ npm test
 ```
 
 Vitest rejects non-PostgreSQL URLs, non-local implicit derivation, unsafe or ambiguous database names, and any final database name that does not end in `_test`. This applies to both `npm test` and direct `npx vitest` commands.
+
+When running Prisma commands after upgrading an older local `.env`, add `DIRECT_URL` with the same local PostgreSQL URL used by `DATABASE_URL`. For Supabase, `DATABASE_URL` should be the pooled runtime URL and `DIRECT_URL` should be the direct/session URL used by Prisma migrations.
 
 The end-to-end suite starts its own Next.js development server and reads its database from `E2E_DATABASE_URL`, falling back to `DATABASE_URL`:
 
