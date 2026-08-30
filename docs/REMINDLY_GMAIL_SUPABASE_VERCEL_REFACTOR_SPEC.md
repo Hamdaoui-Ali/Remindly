@@ -1,15 +1,17 @@
 # Remindly Refactor Technical Specification
 ## Gmail API + Supabase + Vercel Architecture
 
-**Document status:** Proposed implementation specification  
+**Document status:** Proposed implementation specification<br>
+**Revision:** 2 — post-review hardening<br>
 **Project:** Remindly  
 **Prepared:** 2026-08-30  
+**Last reviewed:** 2026-08-30<br>
 **Target stack:** Next.js 16, React 19, TypeScript, Prisma 7, PostgreSQL/Supabase, Supabase Auth, Supabase Cron, Gmail API, Vercel  
 **Source baseline:** `Remindly-main(1).zip`
 
 ---
 
-## 1. Executive Summary
+# 1. Executive Summary
 
 Remindly is currently implemented as a **private, single-owner Next.js application**. The current codebase has a strong notification-processing core, including durable notification rows, bounded processing, retry state, processing leases, recovery, and provider abstraction. However, the application is not yet structured as a public multi-user reminder service.
 
@@ -25,7 +27,9 @@ The target refactor will transform Remindly into a **multi-user, serverless-read
 - preserves the existing durable notification ledger and retry architecture where possible;
 - enforces per-user ownership for every reminder operation;
 - supports multiple reminder alerts per event, including day- and hour-based offsets;
-- remains compatible with Vercel/Supabase free tiers for a personal/non-commercial beta, subject to provider limits and policies.
+- is designed to operate at `$0` for a low-volume, personal/non-commercial beta while all providers remain within their current free-tier limits and policies.
+
+The `$0` objective is an operating target, not a permanent price or availability guarantee. Provider pricing, quotas, acceptable-use rules, OAuth verification requirements, project pausing, and account enforcement can change independently of Remindly. The architecture must therefore preserve a migration path to another host, database tier, scheduler, or transactional email provider.
 
 The most important architectural rule is:
 
@@ -571,7 +575,8 @@ Create:
 ```text
 src/lib/supabase/client.ts
 src/lib/supabase/server.ts
-src/lib/supabase/middleware.ts
+src/lib/supabase/proxy.ts
+src/lib/supabase/admin.ts
 ```
 
 ### Browser client
@@ -589,6 +594,10 @@ Uses cookie-based SSR configuration.
 
 Supabase currently recommends SSR clients with cookies and PKCE-compatible flows for frameworks such as Next.js.
 
+### Admin client
+
+Uses server-only `SUPABASE_SECRET_KEY` and is never cookie-backed or exposed to the browser. Its allowed operations are limited to deleting the already authenticated current user and explicit owner-run profile reconciliation. Business repositories must not use the admin client to bypass ownership checks.
+
 ---
 
 ## 5.3 Replace owner auth helper
@@ -600,6 +609,7 @@ src/server/auth/config.ts
 src/server/auth/require-owner.ts
 src/server/auth/session-cookie.ts
 src/auth.ts
+src/middleware.ts
 src/app/api/auth/[...nextauth]/route.ts
 ```
 
@@ -642,11 +652,23 @@ as the current identity.
 
 ---
 
-## 5.4 Middleware
+## 5.4 Next.js 16 Proxy
 
-Rewrite `src/middleware.ts` for Supabase SSR session refresh.
+Next.js 16 renamed the Middleware convention to Proxy. Retire:
 
-Middleware responsibilities:
+```text
+src/middleware.ts
+```
+
+and create:
+
+```text
+src/proxy.ts
+```
+
+using the `proxy` export required by the installed Next.js documentation.
+
+Proxy responsibilities:
 
 - refresh auth cookies;
 - redirect unauthenticated page requests to `/login`;
@@ -658,9 +680,12 @@ Middleware responsibilities:
   - `/api/health`
   - `/api/internal/process-due-notifications`
   - `/api/internal/auth/send-email`;
-- do not treat middleware alone as the final authorization layer.
+- do not perform slow application-data queries;
+- do not treat Proxy as the final authorization layer.
 
 API handlers and server actions must still call `requireUser()`.
+
+Authorization checks must live close to the data source in server-only repository/service functions. Layout visibility and Proxy redirects are user-experience controls, not security boundaries.
 
 ---
 
@@ -705,10 +730,10 @@ src/app/auth/confirm/route.ts
 
 The route must follow Supabase's SSR confirmation pattern and exchange the token hash for a session.
 
-Expected redirect:
+Expected action-specific redirect, for example signup:
 
 ```text
-/auth/confirm?token_hash=...&type=email
+/auth/confirm?token_hash=...&type=signup
 ```
 
 After success:
@@ -766,6 +791,14 @@ Environment:
 SUPABASE_SEND_EMAIL_HOOK_SECRET=v1,whsec_...
 ```
 
+Normalize the dashboard-provided secret exactly once before constructing the verifier:
+
+```ts
+const webhookSecret = configuredSecret.replace(/^v1,whsec_/, '');
+```
+
+Reject startup/request configuration if the resulting secret is empty. Do not log the configured value, normalized value, raw body, or signature headers.
+
 Processing sequence:
 
 ```text
@@ -788,6 +821,36 @@ return HTTP 200 {}
 ```
 
 Never parse JSON before signature verification if the verification library expects the exact raw body.
+
+Require the Standard Webhooks ID, timestamp, and signature headers expected by the library. Keep its timestamp-tolerance/replay protection enabled. Return a sanitized error contract; do not return verifier details to callers.
+
+## 6.2.1 Five-second execution budget
+
+Supabase HTTP Auth Hooks must complete within five seconds. The endpoint therefore has a stricter contract than the reminder processor.
+
+The complete path includes:
+
+```text
+Vercel cold start
+  + Standard Webhooks verification
+  + optional Google token refresh
+  + Gmail messages.send
+  + response serialization
+```
+
+Requirements:
+
+- enforce a total route deadline below five seconds;
+- use shorter bounded timeouts for token refresh and Gmail send;
+- abort outstanding fetches when the route deadline is reached;
+- return Supabase's documented hook error shape on provider/configuration failure;
+- never perform an in-request retry after an ambiguous Gmail send timeout;
+- do not acknowledge success before Gmail returns a successful Message resource;
+- test both a warm access-token path and a cold-start/token-refresh path.
+
+Because Gmail has no idempotency key, an ambiguous hook timeout may still result in a delivered email even though Supabase reports failure. This limitation must be documented in the operational runbook.
+
+Launch gate: if deployed cold-refresh measurements cannot reliably finish below the four-second application deadline, do not enable public signup with this Vercel hook path. Re-evaluate a lower-latency hook runtime or transactional email provider; do not hide the failure by increasing a timeout beyond Supabase's limit.
 
 ---
 
@@ -827,6 +890,21 @@ Email change requires special care. Supabase documents counterintuitive token/ha
 
 The implementation must follow the Supabase hook payload contract rather than inferring recipient/hash pairing from variable names.
 
+Required mapping contract:
+
+| `email_action_type` | Recipient | Token/hash source | Confirmation type |
+|---|---|---|---|
+| `signup` | `user.email` | `token` / `token_hash` | `signup` |
+| `recovery` | `user.email` | `token` / `token_hash` | `recovery` |
+| `magiclink` | `user.email` | `token` / `token_hash` | `magiclink` |
+| `invite` | invited `user.email` | `token` / `token_hash` | `invite` |
+| `email_change`, current address | `user.email` | `token` / `token_hash_new` | `email_change` |
+| `email_change`, new address | `user.new_email` | `token_new` / `token_hash` | `email_change` |
+
+When Secure Email Change is disabled and only one token pair is present, send one message to `user.new_email` using the token/hash combination present in the payload as defined by the current Supabase contract. Zod validation must model these action variants as a discriminated union rather than one object with loosely optional fields.
+
+Before implementation, verify the table against the exact Supabase version active for the project. Contract tests must use captured redacted fixtures for each enabled action.
+
 ---
 
 ## 6.5 Auth email link generation
@@ -841,6 +919,8 @@ ${APP_URL}/auth/confirm
   &type=${actionType}
   &next=${safeRedirect}
 ```
+
+The confirmation route must pass the action-specific type to `supabase.auth.verifyOtp({ token_hash, type })`; it must not collapse all actions to `type=email`.
 
 Only permit redirects back to known Remindly origins/paths.
 
@@ -936,6 +1016,31 @@ when Supabase changes them.
 ### Important
 
 When using a `security definer` function, set an empty `search_path` and fully qualify relations.
+
+## 7.3 User deletion and profile repair
+
+Prisma does not manage Supabase's `auth` schema, so matching UUID values alone do not define the full user lifecycle.
+
+The Supabase integration SQL must define one authoritative deletion policy:
+
+```text
+auth.users deletion
+  -> delete public.user_profiles row
+  -> cascade to reminders
+  -> cascade to reminder_alerts
+  -> cascade to notifications
+```
+
+Prefer a database foreign key from `public.user_profiles.id` to `auth.users.id` with `ON DELETE CASCADE` when supported by the active Supabase configuration. Otherwise, use a minimal, versioned Auth deletion trigger with equivalent behavior.
+
+Add an idempotent reconciliation script that can:
+
+- create a missing profile for an existing Auth user;
+- update stale email verification metadata;
+- report orphaned profiles without logging email addresses;
+- run in dry-run mode before making repairs.
+
+Account deletion is destructive and must require recent authentication/explicit confirmation in the product flow. The retention policy for sent notification metadata must be documented before public signup is enabled; the MVP policy is full cascade deletion with the account.
 
 ---
 
