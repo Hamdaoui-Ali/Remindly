@@ -1,8 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
-import { hashSync } from 'bcryptjs';
+import { loadEnvConfig } from '@next/env';
 
-const ownerEmail = process.env.E2E_OWNER_EMAIL ?? 'owner@example.com';
-const ownerPassword = process.env.E2E_OWNER_PASSWORD ?? 'correct-password';
+loadEnvConfig(process.cwd());
+
+const e2eDatabaseUrl = process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!e2eDatabaseUrl) {
+  throw new Error('E2E_DATABASE_URL or DATABASE_URL must be set before running Playwright.');
+}
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -13,13 +18,11 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       APP_URL: 'http://127.0.0.1:3000',
-      AUTH_SECRET: 'test-auth-secret-with-at-least-32-characters',
-      DATABASE_URL: process.env.E2E_DATABASE_URL
-        ?? process.env.DATABASE_URL
-        ?? 'postgresql://remindly:remindly@localhost:5432/remindly?schema=public',
-      NEXTAUTH_URL: 'http://127.0.0.1:3000',
-      OWNER_EMAIL: ownerEmail,
-      OWNER_PASSWORD_HASH: hashSync(ownerPassword, 4),
+      DATABASE_URL: e2eDatabaseUrl,
+      DIRECT_URL: e2eDatabaseUrl,
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321',
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? 'test-publishable-key',
+      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY ?? 'test-secret-key',
       RESEND_API_KEY: 're_test',
       RESEND_FROM: 'Remindly <notifications@example.com>',
       SCHEDULER_SECRET: 'test-scheduler-secret',

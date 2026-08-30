@@ -3,7 +3,11 @@ import { PrismaClient } from '@/generated/prisma/client';
 import { assertTestDatabaseUrl } from './test-database';
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://remindly:remindly@localhost:5432/remindly';
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL must be set before creating the Prisma client.');
+}
 
 if (process.env.VITEST === 'true') {
   assertTestDatabaseUrl(databaseUrl);
