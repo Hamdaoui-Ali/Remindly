@@ -61,4 +61,18 @@ describe('reconcileProfiles', () => {
 
     expect(upsert).not.toHaveBeenCalled();
   });
+
+  it('sorts orphan profile IDs with locale-aware ordering', async () => {
+    const result = await reconcileProfiles({
+      dryRun: true,
+      authUsers: [],
+      profiles: [
+        { id: 'B', email: 'b@example.com', emailVerifiedAt: null },
+        { id: 'a', email: 'a@example.com', emailVerifiedAt: null },
+      ],
+      upsert: vi.fn(),
+    });
+
+    expect(result.orphanedProfileIds).toEqual(['a', 'B']);
+  });
 });

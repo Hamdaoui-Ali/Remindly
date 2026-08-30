@@ -80,7 +80,7 @@ export async function reconcileProfiles(input: ProfileReconciliationInput): Prom
     orphanedProfileIds: input.profiles
       .filter((profile) => !authUserIds.has(profile.id))
       .map((profile) => profile.id)
-      .sort(),
+      .sort((left, right) => left.localeCompare(right)),
     dryRun: input.dryRun,
   };
 }
