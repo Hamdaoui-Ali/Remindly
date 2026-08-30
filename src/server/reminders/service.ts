@@ -5,6 +5,7 @@ import {
   createPendingEmailNotification,
 } from '@/server/notifications/ledger';
 import { NotificationRepository } from '@/server/notifications/repository';
+import { ProfileRepository } from '@/server/profile/repository';
 import { SettingsRepository } from '@/server/settings/repository';
 import { calendarDayDifference } from '@/server/urgency/calendar';
 import { calculateAlertAt } from '@/server/urgency/scheduling';
@@ -149,7 +150,9 @@ export class ReminderService {
         leadDays: patch.leadDays ?? current.alertLeadDays as CreateReminderInput['leadDays'],
         alertTime: patch.alertTime ?? current.alertTime,
       };
-      const timezone = configuredTimezone(await new SettingsRepository(tx).getSingleton());
+      const timezone = configuredTimezone(userId
+        ? await new ProfileRepository(tx).findById(userId)
+        : await new SettingsRepository(tx).getSingleton());
       const next = schedule(merged, timezone);
       const scheduleChanged = next.validated.endDate !== dateOnly(current.endDate)
         || next.validated.leadDays !== current.alertLeadDays
@@ -254,7 +257,9 @@ export class ReminderService {
     const now = typeof userIdOrNow === 'string' ? maybeNow! : userIdOrNow;
     return withTransaction(async (tx) => {
       const [timezone, reminders] = await Promise.all([
-        new SettingsRepository(tx).getSingleton().then(configuredTimezone),
+        (userId
+          ? new ProfileRepository(tx).findById(userId)
+          : new SettingsRepository(tx).getSingleton()).then(configuredTimezone),
         new ReminderRepository(tx).listActive(userId),
       ]);
       const currentNotifications = await new NotificationRepository(tx).findCurrentForReminders(reminders);
@@ -288,7 +293,9 @@ export class ReminderService {
     input: CreateReminderInput,
     parentReminderId?: string,
   ): Promise<ReminderCycle> {
-    const timezone = configuredTimezone(await new SettingsRepository(tx).getSingleton());
+    const timezone = configuredTimezone(userId
+      ? await new ProfileRepository(tx).findById(userId)
+      : await new SettingsRepository(tx).getSingleton());
     const next = schedule(input, timezone);
     const reminderInput = {
       name: next.validated.name,
