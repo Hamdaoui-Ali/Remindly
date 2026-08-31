@@ -283,3 +283,16 @@ suite.
   current notification.
 - Roll back application reads before applying destructive schema changes.
 
+### Backfill command contract
+
+The legacy conversion command is `npm run reminders:backfill` and is dry-run by
+default. `--apply` enables writes only after a database export has been taken.
+Each legacy reminder is converted to a `dueAt` instant at 23:59 in the owner's
+timezone, one enabled version-one alert preserving the existing `alertAt`, and
+one linked notification while retaining its status and delivery history.
+
+The command pages through reminders, is safe to rerun for reminders that
+already have an enabled alert, emits aggregate counts only, and fails the
+verification gate for missing owners, missing current notifications, schedule
+mismatches, invalid legacy schedules, or unreconciled reminder counts.
+
