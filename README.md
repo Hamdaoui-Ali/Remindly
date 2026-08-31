@@ -138,6 +138,28 @@ The command never logs profile email addresses. It preserves existing
 timezone and default-alert preferences when repairing email or verification
 metadata. Keep the default dry-run for scheduled audits.
 
+### Legacy reminder backfill
+
+The alert migration is also dry-run by default. It reconstructs `dueAt` from
+the legacy calendar date and alert time in the user's profile timezone, creates
+one version-one `ReminderAlert`, and links or creates the current notification
+ledger row without logging reminder content or email addresses:
+
+```powershell
+npm run reminders:backfill
+```
+
+Review the aggregate counts and sanitized issues before applying the same plan:
+
+```powershell
+npm run reminders:backfill -- --apply
+```
+
+Do not apply the command until the database has been exported and every active
+reminder has an owner. The command aborts when its reconciliation issues are
+non-empty; strict non-null ownership and alert-linkage migrations remain a
+separate cutover step.
+
 ### Health
 
 `GET /api/health` is public so infrastructure can check readiness. A healthy database returns HTTP 200:

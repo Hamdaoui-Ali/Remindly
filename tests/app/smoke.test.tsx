@@ -18,6 +18,10 @@ vi.mock('@/server/dashboard/queries', () => ({
   }),
 }));
 
+vi.mock('@/server/auth/require-user', () => ({
+  requireUser: vi.fn().mockResolvedValue({ id: 'user-a', email: 'a@example.com' }),
+}));
+
 it('renders the operational dashboard', async () => {
   render(await HomePage());
   expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
