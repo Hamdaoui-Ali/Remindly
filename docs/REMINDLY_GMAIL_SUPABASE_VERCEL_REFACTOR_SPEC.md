@@ -3594,3 +3594,20 @@ This is the smallest coherent architecture that meets the current goals while pr
 The two largest refactors are **multi-user ownership** and **Supabase Auth migration**. The Gmail provider itself is comparatively contained because the project already has an email-provider abstraction.
 
 The Gmail approach should be treated as a **low-volume beta/portfolio architecture**. Keep the provider boundary clean so Remindly can switch back to a dedicated transactional email provider once user volume, reliability requirements, or commercial use justify it.
+
+## 40.1. Implementation checkpoint — legacy reminder backfill tooling
+
+The next migration slice now includes a dry-run-by-default backfill plan at
+`src/server/reminders/backfill.ts` and the command
+`npm run reminders:backfill`. It converts each owned legacy reminder's
+`endDate` + `alertTime` into a timezone-aware `dueAt`, preserves its existing
+legacy `alertAt` instant as a version-one `ReminderAlert`, and links the
+current notification row or creates one when it is missing. Existing
+notification status, including `SENT`, is not changed by the linking action.
+
+The command prints only aggregate counts and sanitized issue codes. It applies
+changes only with `--apply`, inside one Prisma transaction; the default mode is
+read-only. It refuses to apply when active reminders have no owner, schedules
+are invalid, or more than one current notification is found. The strict
+ownership/alert-linkage migration remains gated on a successful dry-run,
+database export, apply, and post-apply reconciliation.
