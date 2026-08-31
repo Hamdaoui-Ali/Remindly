@@ -7,12 +7,14 @@ const supabasePublicEnvSchema = z.object({
 
 const supabaseEnvSchema = supabasePublicEnvSchema.extend({
   SUPABASE_SECRET_KEY: z.string().min(1),
+  SUPABASE_SEND_EMAIL_HOOK_SECRET: z.string().min(1).optional(),
 });
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
   SCHEDULER_SECRET: z.string().min(16),
+  SUPABASE_SEND_EMAIL_HOOK_SECRET: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1),
   RESEND_FROM: z.string().min(1),
   EMAIL_PROVIDER: z.enum(['resend', 'gmail']).default('resend'),
