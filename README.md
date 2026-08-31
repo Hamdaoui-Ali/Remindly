@@ -7,7 +7,7 @@ Remindly is a Supabase-authenticated deadline reminder application. It turns eac
 - Node.js `^20.19`, `^22.12`, or `>=24.0.0` (the Prisma 7 requirement; Next.js alone supports `>=20.9.0`)
 - npm
 - Docker with Docker Compose, or another PostgreSQL instance
-- A PostgreSQL database for local development; Gmail delivery remains a later refactor slice
+- A PostgreSQL database for local development; Gmail delivery is implemented behind a provider boundary and remains a later wiring/deployment slice
 
 ## Local setup
 
@@ -187,6 +187,20 @@ A database failure returns HTTP 503 with `status: "degraded"`. The response neve
 The processor claims ledger rows atomically, isolates each send, uses a 15-minute processing lease, and stops automatic delivery after five attempts. Every retry reuses the notification UUID as the provider idempotency key. `SENT` means the email provider accepted the request; it is not a claim of mailbox delivery. Late scheduler runs catch up because eligibility is based on stored due and retry timestamps.
 
 Do not log request headers, environment values, reminder names, email bodies, or provider errors. The endpoint logs a random run identifier and aggregate counts only.
+
+### Gmail budget boundary
+
+The Gmail refactor includes a provider-neutral rolling send budget in
+`src/server/notifications/budget.ts`. The default policy is 350 Gmail sends
+per rolling 24 hours, with 50 reserved for Auth operations and a 300-send
+reminder ceiling. `budget-repository.ts` reserves capacity under a PostgreSQL
+transaction advisory lock, finalizes attempts with sanitized metadata, and
+converts stale reservations to `UNKNOWN_OUTCOME` after a worker crash.
+
+The pure circuit-breaker policy pauses calls after repeated Auth revocation,
+mailbox-limit, or configuration failures. These boundaries are tested but are
+not yet wired into the live reminder processor or Supabase Auth Hook; that is
+the next integration slice.
 
 ### Scheduled trigger
 
