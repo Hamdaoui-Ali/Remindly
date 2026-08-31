@@ -403,6 +403,7 @@ export const ModelName = {
   Notification: 'Notification',
   EmailSendAttempt: 'EmailSendAttempt',
   ProcessorRun: 'ProcessorRun',
+  GmailCircuitState: 'GmailCircuitState',
   Settings: 'Settings'
 } as const
 
@@ -419,7 +420,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "userProfile" | "reminder" | "reminderAlert" | "notification" | "emailSendAttempt" | "processorRun" | "settings"
+    modelProps: "userProfile" | "reminder" | "reminderAlert" | "notification" | "emailSendAttempt" | "processorRun" | "gmailCircuitState" | "settings"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -867,6 +868,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    GmailCircuitState: {
+      payload: Prisma.$GmailCircuitStatePayload<ExtArgs>
+      fields: Prisma.GmailCircuitStateFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.GmailCircuitStateFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.GmailCircuitStateFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>
+        }
+        findFirst: {
+          args: Prisma.GmailCircuitStateFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.GmailCircuitStateFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>
+        }
+        findMany: {
+          args: Prisma.GmailCircuitStateFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>[]
+        }
+        create: {
+          args: Prisma.GmailCircuitStateCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>
+        }
+        createMany: {
+          args: Prisma.GmailCircuitStateCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.GmailCircuitStateCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>[]
+        }
+        delete: {
+          args: Prisma.GmailCircuitStateDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>
+        }
+        update: {
+          args: Prisma.GmailCircuitStateUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>
+        }
+        deleteMany: {
+          args: Prisma.GmailCircuitStateDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.GmailCircuitStateUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.GmailCircuitStateUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>[]
+        }
+        upsert: {
+          args: Prisma.GmailCircuitStateUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailCircuitStatePayload>
+        }
+        aggregate: {
+          args: Prisma.GmailCircuitStateAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateGmailCircuitState>
+        }
+        groupBy: {
+          args: Prisma.GmailCircuitStateGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GmailCircuitStateGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.GmailCircuitStateCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GmailCircuitStateCountAggregateOutputType> | number
+        }
+      }
+    }
     Settings: {
       payload: Prisma.$SettingsPayload<ExtArgs>
       fields: Prisma.SettingsFieldRefs
@@ -1079,6 +1154,19 @@ export const ProcessorRunScalarFieldEnum = {
 export type ProcessorRunScalarFieldEnum = (typeof ProcessorRunScalarFieldEnum)[keyof typeof ProcessorRunScalarFieldEnum]
 
 
+export const GmailCircuitStateScalarFieldEnum = {
+  id: 'id',
+  state: 'state',
+  failureCount: 'failureCount',
+  openedAt: 'openedAt',
+  lastFailureCode: 'lastFailureCode',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GmailCircuitStateScalarFieldEnum = (typeof GmailCircuitStateScalarFieldEnum)[keyof typeof GmailCircuitStateScalarFieldEnum]
+
+
 export const SettingsScalarFieldEnum = {
   id: 'id',
   notificationEmail: 'notificationEmail',
@@ -1255,6 +1343,20 @@ export type ListEnumProcessorRunStatusFieldRefInput<$PrismaModel> = FieldRefInpu
 
 
 /**
+ * Reference to a field of type 'GmailCircuitStateStatus'
+ */
+export type EnumGmailCircuitStateStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GmailCircuitStateStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'GmailCircuitStateStatus[]'
+ */
+export type ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GmailCircuitStateStatus[]'>
+    
+
+
+/**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -1424,6 +1526,7 @@ export type GlobalOmitConfig = {
   notification?: Prisma.NotificationOmit
   emailSendAttempt?: Prisma.EmailSendAttemptOmit
   processorRun?: Prisma.ProcessorRunOmit
+  gmailCircuitState?: Prisma.GmailCircuitStateOmit
   settings?: Prisma.SettingsOmit
 }
 

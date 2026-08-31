@@ -57,6 +57,7 @@ export const ModelName = {
   Notification: 'Notification',
   EmailSendAttempt: 'EmailSendAttempt',
   ProcessorRun: 'ProcessorRun',
+  GmailCircuitState: 'GmailCircuitState',
   Settings: 'Settings'
 } as const
 
@@ -173,6 +174,19 @@ export const ProcessorRunScalarFieldEnum = {
 } as const
 
 export type ProcessorRunScalarFieldEnum = (typeof ProcessorRunScalarFieldEnum)[keyof typeof ProcessorRunScalarFieldEnum]
+
+
+export const GmailCircuitStateScalarFieldEnum = {
+  id: 'id',
+  state: 'state',
+  failureCount: 'failureCount',
+  openedAt: 'openedAt',
+  lastFailureCode: 'lastFailureCode',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GmailCircuitStateScalarFieldEnum = (typeof GmailCircuitStateScalarFieldEnum)[keyof typeof GmailCircuitStateScalarFieldEnum]
 
 
 export const SettingsScalarFieldEnum = {

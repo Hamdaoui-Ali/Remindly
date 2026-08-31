@@ -48,6 +48,11 @@ export type EmailSendAttempt = Prisma.EmailSendAttemptModel
  */
 export type ProcessorRun = Prisma.ProcessorRunModel
 /**
+ * Model GmailCircuitState
+ * 
+ */
+export type GmailCircuitState = Prisma.GmailCircuitStateModel
+/**
  * Model Settings
  * 
  */

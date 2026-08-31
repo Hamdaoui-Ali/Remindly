@@ -43,6 +43,12 @@ enum ProcessorRunStatus {
   FAILED
 }
 
+enum GmailCircuitStateStatus {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
 model UserProfile {
   id               String    @id @db.Uuid
   email            String    @unique
@@ -162,6 +168,18 @@ model ProcessorRun {
 
   @@index([status, startedAt])
   @@map("processor_runs")
+}
+
+model GmailCircuitState {
+  id               String                 @id
+  state            GmailCircuitStateStatus @default(CLOSED)
+  failureCount     Int                    @default(0) @map("failure_count")
+  openedAt         DateTime?              @map("opened_at") @db.Timestamptz(6)
+  lastFailureCode  String?                @map("last_failure_code")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("gmail_circuit_state")
 }
 
 model Settings {
