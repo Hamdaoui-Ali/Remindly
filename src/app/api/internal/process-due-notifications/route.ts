@@ -1,6 +1,8 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { serverEnv } from '@/lib/env';
+import { GmailEmailProvider } from '@/server/email/gmail-provider';
+import { GmailOAuthClient } from '@/server/email/gmail-oauth';
 import { ResendEmailProvider } from '@/server/email/resend-provider';
 import { processDueNotifications } from '@/server/notifications/processor';
 
@@ -50,10 +52,20 @@ export async function POST(request: Request) {
   }
 
   try {
-    const provider = new ResendEmailProvider({
-      apiKey: env.RESEND_API_KEY,
-      from: env.RESEND_FROM,
-    });
+    const provider = env.EMAIL_PROVIDER === 'gmail'
+      ? new GmailEmailProvider({
+        from: `${env.GMAIL_SENDER_NAME} <${env.GMAIL_SENDER_EMAIL}>`,
+        oauth: new GmailOAuthClient({
+          clientId: env.GMAIL_CLIENT_ID!,
+          clientSecret: env.GMAIL_CLIENT_SECRET!,
+          refreshToken: env.GMAIL_REFRESH_TOKEN!,
+        }),
+        requestTimeoutMs: env.GMAIL_REQUEST_TIMEOUT_MS,
+      })
+      : new ResendEmailProvider({
+        apiKey: env.RESEND_API_KEY,
+        from: env.RESEND_FROM,
+      });
     const counts = await processDueNotifications({
       now: new Date(),
       limit: PROCESSOR_BATCH_LIMIT,
