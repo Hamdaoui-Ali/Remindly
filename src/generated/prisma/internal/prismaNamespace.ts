@@ -1052,6 +1052,7 @@ export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[k
 
 export const EmailSendAttemptScalarFieldEnum = {
   id: 'id',
+  notificationId: 'notificationId',
   purpose: 'purpose',
   outcome: 'outcome',
   sanitizedCode: 'sanitizedCode',
