@@ -90,6 +90,29 @@ The default Vitest script runs serially to avoid contention between integration 
 
 ## Operations contract
 
+### Legacy reminder alert backfill
+
+The multi-alert cutover keeps the legacy reminder columns readable while old
+rows are converted. The backfill is read-only by default and prints aggregate
+counts only:
+
+```powershell
+npm run reminders:backfill -- --dry-run
+```
+
+Review the report before applying changes. Export the database first, then run:
+
+```powershell
+npm run reminders:backfill -- --apply
+```
+
+The command is idempotent: rerunning it does not create a second alert for a
+reminder that already has an enabled alert. Cutover is not ready while the
+report contains missing owners, missing current notifications, mismatched
+schedule versions/timestamps, invalid legacy schedules, or unreconciled
+reminder counts. Roll back by deploying the previous application version; do
+not apply the strict-schema migration until the report is ready.
+
 ### Supabase profile synchronization
 
 Apply `infra/supabase/001-profile-sync.sql` only in the hosted Supabase SQL

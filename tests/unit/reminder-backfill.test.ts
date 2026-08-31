@@ -1,101 +1,128 @@
+import { describe, expect, it } from 'vitest';
 import {
   buildLegacyBackfillPlan,
-  executeBackfillPlan,
-  type BackfillWriter,
+  evaluateBackfillReport,
+  type LegacyBackfillNotification,
+  type LegacyBackfillReminder,
 } from '@/server/reminders/backfill';
 
-const dueDate = new Date('2026-09-15T09:00:00.000Z');
-const scheduledFor = new Date('2026-09-12T08:00:00.000Z');
+const reminder: LegacyBackfillReminder = {
+  id: 'reminder-1',
+  endDate: new Date('2026-09-10T00:00:00.000Z'),
+  alertAt: new Date('2026-09-07T08:00:00.000Z'),
+  alertLeadDays: 3,
+  userId: 'profile-1',
+  status: 'ACTIVE',
+};
 
-function legacyReminder(overrides: Partial<Parameters<typeof buildLegacyBackfillPlan>[0]['reminders'][number]> = {}) {
+function notification(overrides: Partial<LegacyBackfillNotification> = {}): LegacyBackfillNotification {
   return {
-    id: 'reminder-a',
-    userId: 'user-a',
-    endDate: dueDate,
-    alertTime: '09:00',
-    alertAt: scheduledFor,
-    status: 'ACTIVE' as const,
+    id: 'notification-1',
+    reminderId: reminder.id,
+    scheduledFor: reminder.alertAt,
+    status: 'PENDING',
+    reminderAlertId: null,
+    scheduleVersion: null,
     ...overrides,
   };
 }
 
-function writerSpy(): BackfillWriter & { calls: string[] } {
-  const calls: string[] = [];
-  return {
-    calls,
-    updateReminder: async () => { calls.push('updateReminder'); },
-    createAlert: async () => { calls.push('createAlert'); },
-    createNotification: async () => { calls.push('createNotification'); },
-    linkNotification: async () => { calls.push('linkNotification'); },
-  };
-}
-
 describe('legacy reminder backfill', () => {
-  it('converts one legacy reminder and links its current notification to version one', () => {
+  it('converts one legacy reminder into a version-one alert and due timestamp', () => {
     const plan = buildLegacyBackfillPlan({
-      reminders: [legacyReminder()],
-      profiles: new Map([['user-a', { timezone: 'UTC' }]]),
-      notifications: [{
-        id: 'notification-a',
-        reminderId: 'reminder-a',
-        scheduledFor,
-        status: 'PENDING',
-        channel: 'EMAIL',
-      }],
-      alerts: [],
-      defaultTimezone: 'UTC',
-      idFactory: () => 'alert-a',
+      reminder,
+      timezone: 'Africa/Casablanca',
+      notifications: [notification()],
+      alertId: 'alert-1',
     });
 
+    expect(plan.dueAt).not.toBeNull();
+    expect(plan.dueAt!.toISOString()).toBe('2026-09-10T22:59:00.000Z');
+    expect(plan.alert).toEqual({
+      id: 'alert-1',
+      reminderId: reminder.id,
+      scheduledFor: reminder.alertAt,
+      offsetMinutes: 5219,
+      scheduleVersion: 1,
+    });
+    expect(plan.notificationUpdates).toEqual([{
+      id: 'notification-1',
+      reminderAlertId: 'alert-1',
+      scheduleVersion: 1,
+    }]);
     expect(plan.issues).toEqual([]);
-    expect(plan.actions).toEqual([
-      expect.objectContaining({ kind: 'updateReminder', reminderId: 'reminder-a', dueAt: dueDate }),
-      expect.objectContaining({ kind: 'createAlert', alertId: 'alert-a', scheduleVersion: 1 }),
-      expect.objectContaining({ kind: 'linkNotification', notificationId: 'notification-a', alertId: 'alert-a', scheduleVersion: 1 }),
-    ]);
-    expect(plan.counts).toMatchObject({ reminders: 1, alertsCreated: 1, notificationsLinked: 1 });
   });
 
-  it('preserves an existing sent notification while linking it', () => {
-    const plan = buildLegacyBackfillPlan({
-      reminders: [legacyReminder()],
-      profiles: new Map([['user-a', { timezone: 'UTC' }]]),
-      notifications: [{ id: 'notification-a', reminderId: 'reminder-a', scheduledFor, status: 'SENT', channel: 'EMAIL' }],
-      alerts: [],
-      defaultTimezone: 'UTC',
-      idFactory: () => 'alert-a',
+  it('links an existing sent notification without changing its delivery history', () => {
+    const sent = notification({
+      status: 'SENT',
+      scheduleVersion: 1,
+      reminderAlertId: 'old-alert',
     });
 
-    expect(plan.actions).toContainEqual(expect.objectContaining({ kind: 'linkNotification', notificationId: 'notification-a' }));
-    expect(plan.actions).not.toContainEqual(expect.objectContaining({ kind: 'cancelNotification' }));
+    const plan = buildLegacyBackfillPlan({
+      reminder,
+      timezone: 'UTC',
+      notifications: [sent],
+      alertId: 'alert-1',
+    });
+
+    expect(plan.notificationUpdates).toEqual([{
+      id: sent.id,
+      reminderAlertId: 'alert-1',
+      scheduleVersion: 1,
+    }]);
+    expect(sent.status).toBe('SENT');
   });
 
-  it('reports active reminders without an owner and does not create actions for them', () => {
+  it('reports a missing owner instead of producing an apply plan', () => {
     const plan = buildLegacyBackfillPlan({
-      reminders: [legacyReminder({ userId: null })],
-      profiles: new Map(),
+      reminder: { ...reminder, userId: null },
+      timezone: 'UTC',
+      notifications: [notification()],
+      alertId: 'alert-1',
+    });
+
+    expect(plan.alert).toBeNull();
+    expect(plan.notificationUpdates).toEqual([]);
+    expect(plan.issues).toContain('missing_owner');
+  });
+
+  it('reports a missing current notification', () => {
+    const plan = buildLegacyBackfillPlan({
+      reminder,
+      timezone: 'UTC',
       notifications: [],
-      alerts: [],
-      defaultTimezone: 'UTC',
+      alertId: 'alert-1',
     });
 
-    expect(plan.issues).toEqual([{ code: 'MISSING_OWNER', reminderId: 'reminder-a' }]);
-    expect(plan.actions).toEqual([]);
+    expect(plan.alert).toBeNull();
+    expect(plan.issues).toContain('missing_notification');
   });
 
-  it('does not call the writer during a dry run', async () => {
-    const plan = buildLegacyBackfillPlan({
-      reminders: [legacyReminder()],
-      profiles: new Map([['user-a', { timezone: 'UTC' }]]),
-      notifications: [],
-      alerts: [],
-      defaultTimezone: 'UTC',
-      idFactory: () => 'alert-a',
-    });
-    const writer = writerSpy();
+  it('fails cutover verification when counts or integrity checks do not reconcile', () => {
+    expect(() => evaluateBackfillReport({
+      remindersScanned: 2,
+      remindersConverted: 1,
+      alertsCreated: 1,
+      notificationsLinked: 1,
+      alreadyMigrated: 0,
+      missingOwners: 0,
+      missingNotifications: 0,
+      mismatchedNotifications: 1,
+      invalidReminders: 0,
+    })).toThrow('Backfill verification failed');
 
-    await executeBackfillPlan(plan, writer, { dryRun: true });
-
-    expect(writer.calls).toEqual([]);
+    expect(evaluateBackfillReport({
+      remindersScanned: 1,
+      remindersConverted: 1,
+      alertsCreated: 1,
+      notificationsLinked: 1,
+      alreadyMigrated: 0,
+      missingOwners: 0,
+      missingNotifications: 0,
+      mismatchedNotifications: 0,
+      invalidReminders: 0,
+    })).toEqual({ ready: true, failures: [] });
   });
 });

@@ -2,6 +2,10 @@ import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import HomePage from '@/app/(protected)/page';
 
+vi.mock('@/server/auth/require-user', () => ({
+  requireUser: vi.fn(async () => ({ id: 'user-a', email: 'owner@example.com' })),
+}));
+
 vi.mock('@/server/dashboard/queries', () => ({
   getDashboardData: vi.fn().mockResolvedValue({
     timezone: 'Africa/Casablanca',

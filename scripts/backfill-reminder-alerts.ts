@@ -1,84 +1,134 @@
-import { prisma } from '@/server/db/client';
-import {
-  buildLegacyBackfillPlan,
-  executeBackfillPlan,
-  type BackfillWriter,
-} from '@/server/reminders/backfill';
+import nextEnv from '@next/env';
+import { buildLegacyBackfillPlan, evaluateBackfillReport, type BackfillReport } from '../src/server/reminders/backfill';
 
-const dryRun = !process.argv.includes('--apply');
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd(), true);
 
-async function main(): Promise<void> {
-  const [reminders, profiles, settings] = await Promise.all([
-    prisma.reminder.findMany({ include: { alerts: true, notifications: true } }),
-    prisma.userProfile.findMany({ select: { id: true, timezone: true } }),
-    prisma.settings.findUnique({ where: { id: 'singleton' }, select: { timezone: true } }),
-  ]);
+const PAGE_SIZE = 250;
 
-  const plan = buildLegacyBackfillPlan({
-    reminders: reminders.map((reminder) => ({
-      id: reminder.id,
-      userId: reminder.userId,
-      endDate: reminder.endDate,
-      alertTime: reminder.alertTime,
-      alertAt: reminder.alertAt,
-      status: reminder.status,
-    })),
-    profiles: new Map(profiles.map((profile) => [profile.id, { timezone: profile.timezone }])),
-    alerts: reminders.flatMap((reminder) => reminder.alerts.map((alert) => ({
-      id: alert.id,
-      reminderId: alert.reminderId,
-      scheduledFor: alert.scheduledFor,
-      scheduleVersion: alert.scheduleVersion,
-      channel: alert.channel,
-    }))),
-    notifications: reminders.flatMap((reminder) => reminder.notifications.map((notification) => ({
-      id: notification.id,
-      reminderId: notification.reminderId,
-      scheduledFor: notification.scheduledFor,
-      status: notification.status,
-      channel: notification.channel,
-    }))),
-    defaultTimezone: settings?.timezone ?? 'UTC',
-  });
-
-  console.log(JSON.stringify({ mode: dryRun ? 'dry-run' : 'apply', counts: plan.counts, issues: plan.issues }));
-  if (plan.issues.length > 0) {
-    throw new Error('Backfill verification failed');
-  }
-  if (dryRun) return;
-
-  await prisma.$transaction(async (tx) => {
-    const writer: BackfillWriter = {
-      updateReminder: async ({ reminderId, dueAt }) => {
-        await tx.reminder.update({ where: { id: reminderId }, data: { dueAt } });
-      },
-      createAlert: async ({ alertId, reminderId, scheduledFor, offsetMinutes, scheduleVersion }) => {
-        await tx.reminderAlert.create({
-          data: { id: alertId, reminderId, scheduledFor, offsetMinutes, scheduleVersion, channel: 'EMAIL', enabled: true },
-        });
-      },
-      linkNotification: async ({ notificationId, alertId, scheduleVersion }) => {
-        await tx.notification.update({ where: { id: notificationId }, data: { reminderAlertId: alertId, scheduleVersion } });
-      },
-      createNotification: async ({ notificationId, reminderId, alertId, scheduledFor, scheduleVersion }) => {
-        await tx.notification.create({
-          data: {
-            id: notificationId,
-            reminderId,
-            reminderAlertId: alertId,
-            scheduledFor,
-            scheduleVersion,
-            channel: 'EMAIL',
-            status: 'PENDING',
-            idempotencyKey: notificationId,
-          },
-        });
-      },
-    };
-    await executeBackfillPlan(plan, writer, { dryRun: false });
-  });
+function emptyReport(): BackfillReport {
+  return {
+    remindersScanned: 0,
+    remindersConverted: 0,
+    alertsCreated: 0,
+    notificationsLinked: 0,
+    alreadyMigrated: 0,
+    missingOwners: 0,
+    missingNotifications: 0,
+    mismatchedNotifications: 0,
+    invalidReminders: 0,
+  };
 }
 
-main()
-  .catch(() => process.exitCode = 1)
-  .finally(() => prisma.$disconnect());
+function addIssues(report: BackfillReport, issues: string[]): void {
+  if (issues.includes('missing_owner')) report.missingOwners += 1;
+  if (issues.includes('missing_notification')) report.missingNotifications += 1;
+  if (issues.includes('mismatched_notification')) report.mismatchedNotifications += 1;
+  if (issues.includes('invalid_reminder')) report.invalidReminders += 1;
+}
+
+async function main() {
+  const [{ prisma }, { SettingsRepository }] = await Promise.all([
+    import('../src/server/db/client'),
+    import('../src/server/settings/repository'),
+  ]);
+  const dryRun = !process.argv.includes('--apply');
+  const report = emptyReport();
+  const settings = await new SettingsRepository(prisma).getSingleton();
+  let cursor: string | undefined;
+
+  for (;;) {
+    const reminders = await prisma.reminder.findMany({
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      take: PAGE_SIZE,
+      orderBy: { id: 'asc' },
+      include: {
+        userProfile: { select: { timezone: true } },
+        alerts: { where: { enabled: true }, include: { notifications: true } },
+        notifications: true,
+      },
+    });
+    if (reminders.length === 0) break;
+
+    for (const reminder of reminders) {
+      report.remindersScanned += 1;
+      const currentAlert = reminder.alerts.find((alert) => alert.enabled);
+      if (currentAlert) {
+        const currentNotification = currentAlert.notifications.find((notification) => (
+          notification.scheduleVersion === currentAlert.scheduleVersion
+          && notification.scheduledFor.getTime() === currentAlert.scheduledFor.getTime()
+        ));
+        if (!currentNotification) report.missingNotifications += 1;
+        if (reminder.status === 'ACTIVE' && !reminder.userId) report.missingOwners += 1;
+        report.alreadyMigrated += 1;
+        continue;
+      }
+
+      const plan = buildLegacyBackfillPlan({
+        reminder: {
+          id: reminder.id,
+          endDate: reminder.endDate,
+          alertAt: reminder.alertAt,
+          alertLeadDays: reminder.alertLeadDays,
+          userId: reminder.userId,
+          status: reminder.status,
+        },
+        timezone: reminder.userProfile?.timezone ?? settings?.timezone ?? 'UTC',
+        notifications: reminder.notifications.map((notification) => ({
+          id: notification.id,
+          reminderId: notification.reminderId,
+          scheduledFor: notification.scheduledFor,
+          status: notification.status,
+          reminderAlertId: notification.reminderAlertId,
+          scheduleVersion: notification.scheduleVersion,
+        })),
+        alertId: crypto.randomUUID(),
+      });
+
+      addIssues(report, plan.issues);
+      if (!plan.alert || !plan.dueAt) continue;
+      report.remindersConverted += 1;
+      report.alertsCreated += 1;
+      report.notificationsLinked += plan.notificationUpdates.length;
+
+      if (dryRun) continue;
+      await prisma.$transaction(async (tx) => {
+        await tx.reminder.update({ where: { id: reminder.id }, data: { dueAt: plan.dueAt } });
+        await tx.reminderAlert.create({
+          data: {
+            id: plan.alert!.id,
+            reminderId: plan.alert!.reminderId,
+            scheduledFor: plan.alert!.scheduledFor,
+            offsetMinutes: plan.alert!.offsetMinutes,
+            scheduleVersion: plan.alert!.scheduleVersion,
+            channel: 'EMAIL',
+            enabled: true,
+          },
+        });
+        for (const update of plan.notificationUpdates) {
+          await tx.notification.update({
+            where: { id: update.id },
+            data: {
+              reminderAlertId: update.reminderAlertId,
+              scheduleVersion: update.scheduleVersion,
+            },
+          });
+        }
+      });
+    }
+
+    cursor = reminders[reminders.length - 1].id;
+    if (reminders.length < PAGE_SIZE) break;
+  }
+
+  const verification = evaluateBackfillReport(report);
+  console.info(JSON.stringify({ ...report, dryRun, ready: verification.ready }));
+  await prisma.$disconnect();
+}
+
+try {
+  await main();
+} catch {
+  console.error('Reminder alert backfill failed');
+  process.exitCode = 1;
+}
