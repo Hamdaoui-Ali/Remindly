@@ -113,6 +113,12 @@ schedule versions/timestamps, invalid legacy schedules, or unreconciled
 reminder counts. Roll back by deploying the previous application version; do
 not apply the strict-schema migration until the report is ready.
 
+The strict follow-up SQL is kept outside Prisma's automatic migration path at
+`prisma/cutover/20260831100000_enforce_alert_cutover.sql`. Apply it manually
+only after exporting the database and confirming the backfill report is ready;
+its preflight aborts before changing constraints when any target row is still
+incomplete.
+
 ### Supabase profile synchronization
 
 Apply `infra/supabase/001-profile-sync.sql` only in the hosted Supabase SQL
