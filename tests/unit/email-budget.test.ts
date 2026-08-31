@@ -3,6 +3,7 @@ import {
   evaluateEmailBudget,
   type EmailBudgetUsage,
 } from '@/server/notifications/budget';
+import { finalizeEmailSend, recoverStaleEmailReservations, reserveEmailSend } from '@/server/notifications/budget-repository';
 import {
   advanceCircuitBreaker,
   initialCircuitBreakerState,
@@ -98,5 +99,57 @@ describe('Gmail circuit breaker', () => {
     );
 
     expect(state).toEqual(initialCircuitBreakerState());
+  });
+});
+
+describe('durable email budget adapter', () => {
+  it('serializes the count and reservation under the shared database lock', async () => {
+    const calls: string[] = [];
+    const tx = {
+      $executeRaw: async () => { calls.push('lock'); return 1; },
+      emailSendAttempt: {
+        count: async ({ where }: { where: { purpose?: string } }) => {
+          calls.push(`count:${where.purpose ?? 'total'}`);
+          return where.purpose === 'REMINDER' ? 2 : where.purpose === 'AUTH' ? 1 : 3;
+        },
+        create: async () => { calls.push('create'); return { id: 'attempt-1' }; },
+        update: async () => undefined,
+      },
+    } as never;
+
+    await expect(reserveEmailSend(tx, policy, 'REMINDER', new Date())).resolves.toEqual({ id: 'attempt-1' });
+    expect(calls).toEqual(['lock', 'count:total', 'count:REMINDER', 'count:AUTH', 'create']);
+  });
+
+  it('does not create a reservation after the total budget is exhausted', async () => {
+    let created = false;
+    const tx = {
+      $executeRaw: async () => 1,
+      emailSendAttempt: {
+        count: async () => 350,
+        create: async () => { created = true; return { id: 'unexpected' }; },
+        update: async () => undefined,
+      },
+    } as never;
+
+    await expect(reserveEmailSend(tx, policy, 'AUTH', new Date())).resolves.toBeNull();
+    expect(created).toBe(false);
+  });
+
+  it('finalizes with only sanitized delivery metadata', async () => {
+    const update = async (args: unknown) => args;
+    await expect(finalizeEmailSend({ update }, 'attempt-1', 'ACCEPTED', new Date(10), {
+      sanitizedCode: 'gmail_accepted',
+      providerMessageId: 'gmail-id-1',
+    })).resolves.toMatchObject({
+      where: { id: 'attempt-1' },
+      data: { outcome: 'ACCEPTED', sanitizedCode: 'gmail_accepted', providerMessageId: 'gmail-id-1' },
+    });
+  });
+
+  it('recovers stale reservations as unknown outcomes', async () => {
+    const updateMany = async (args: unknown) => ({ count: args ? 3 : 0 });
+
+    await expect(recoverStaleEmailReservations({ updateMany }, new Date(1), new Date(2))).resolves.toEqual({ count: 3 });
   });
 });
