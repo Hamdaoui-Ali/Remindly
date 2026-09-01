@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useRef } from 'react';
 import { registerAction, type RegisterState } from './actions';
+import { AuthField } from '@/components/auth/auth-field';
 import { AuthFeedback } from '@/components/auth/auth-feedback';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
@@ -26,18 +27,9 @@ export default function RegisterPage() {
       footer={<p><Link href="/login">Already have an account? Sign in</Link></p>}
     >
         <form action={formAction} noValidate>
-          <div className="login-field">
-            <label htmlFor="email">Email</label>
-            <input ref={emailRef} id="email" name="email" type="email" autoComplete="email" aria-invalid={state.field === 'email'} aria-describedby={state.error ? 'register-error' : undefined} />
-          </div>
-          <div className="login-field">
-            <label htmlFor="password">Password</label>
-            <input ref={passwordRef} id="password" name="password" type="password" autoComplete="new-password" aria-invalid={state.field === 'password'} aria-describedby={state.error ? 'register-error' : undefined} />
-          </div>
-          <div className="login-field">
-            <label htmlFor="confirmPassword">Confirm password</label>
-            <input ref={confirmRef} id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" aria-invalid={state.field === 'confirmPassword'} aria-describedby={state.error ? 'register-error' : undefined} />
-          </div>
+          <AuthField inputRef={emailRef} id="email" label="Email" name="email" type="email" autoComplete="email" aria-invalid={state.field === 'email'} aria-describedby={state.error ? 'register-error' : undefined} />
+          <AuthField inputRef={passwordRef} id="password" label="Password" name="password" type="password" autoComplete="new-password" aria-invalid={state.field === 'password'} aria-describedby={state.error ? 'register-error' : undefined} />
+          <AuthField inputRef={confirmRef} id="confirmPassword" label="Confirm password" name="confirmPassword" type="password" autoComplete="new-password" aria-invalid={state.field === 'confirmPassword'} aria-describedby={state.error ? 'register-error' : undefined} />
 
           <AuthFeedback error={state.error} errorId="register-error" message={state.message} messageId="register-message" />
           <AuthSubmitButton pendingLabel="Creating account..." label="Create account" />

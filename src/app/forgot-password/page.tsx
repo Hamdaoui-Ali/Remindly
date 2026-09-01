@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useRef } from 'react';
 import { forgotPasswordAction, type PasswordRecoveryState } from './actions';
+import { AuthField } from '@/components/auth/auth-field';
 import { AuthFeedback } from '@/components/auth/auth-feedback';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
@@ -24,10 +25,7 @@ export default function ForgotPasswordPage() {
       footer={<p><Link href="/login">Back to sign in</Link></p>}
     >
         <form action={formAction} noValidate>
-          <div className="login-field">
-            <label htmlFor="email">Email</label>
-            <input ref={emailRef} id="email" name="email" type="email" autoComplete="email" aria-invalid={state.field === 'email'} aria-describedby={state.error ? 'forgot-password-error' : undefined} />
-          </div>
+          <AuthField inputRef={emailRef} id="email" label="Email" name="email" type="email" autoComplete="email" aria-invalid={state.field === 'email'} aria-describedby={state.error ? 'forgot-password-error' : undefined} />
           <AuthFeedback error={state.error} errorId="forgot-password-error" message={state.message} messageId="forgot-password-message" />
           <AuthSubmitButton pendingLabel="Sending link..." label="Send reset link" />
         </form>
