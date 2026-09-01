@@ -18,9 +18,9 @@ export interface EmailDeliveryDependencies {
     details?: { sanitizedCode?: string; providerMessageId?: string | null },
   ) => Promise<unknown>;
   circuit: {
-    isOpen: () => boolean;
-    success: () => void;
-    failure: (code: string) => void;
+    isOpen: () => boolean | Promise<boolean>;
+    success: () => void | Promise<void>;
+    failure: (code: string) => void | Promise<void>;
   };
 }
 
@@ -38,7 +38,7 @@ export function createEmailDelivery(dependencies: EmailDeliveryDependencies) {
       message: SendEmailInput,
       now = new Date(),
     ): Promise<EmailDeliveryResult> {
-      if (dependencies.circuit.isOpen()) return { status: 'blocked', reason: 'circuit_open' };
+      if (await dependencies.circuit.isOpen()) return { status: 'blocked', reason: 'circuit_open' };
       const reservation = await dependencies.reserve(purpose, now);
       if (!reservation) return { status: 'blocked', reason: 'budget_exhausted' };
 
@@ -48,14 +48,14 @@ export function createEmailDelivery(dependencies: EmailDeliveryDependencies) {
           sanitizedCode: 'email_accepted',
           providerMessageId: result.providerMessageId ?? null,
         });
-        dependencies.circuit.success();
+        await dependencies.circuit.success();
         return { status: 'sent', providerMessageId: result.providerMessageId };
       } catch (error) {
         const outcome = emailDeliveryOutcome(error) ?? 'unknown_outcome';
         const ledgerOutcome = outcome === 'definite_failure' ? 'DEFINITE_FAILURE' : 'UNKNOWN_OUTCOME';
         const code = sanitizedCode(error, `email_provider_${outcome}`);
         await dependencies.finalize(reservation.id, ledgerOutcome, new Date(), { sanitizedCode: code });
-        dependencies.circuit.failure(code);
+        await dependencies.circuit.failure(code);
         throw error;
       }
     },
