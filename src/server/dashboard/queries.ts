@@ -4,6 +4,7 @@ import { prisma } from '@/server/db/client';
 import { SETTINGS_SINGLETON_ID } from '@/server/settings/repository';
 import { calendarDayDifference, getLocalDate } from '@/server/urgency/calendar';
 import { calculateUrgency } from '@/server/urgency/urgency';
+import { relativeTime } from '@/server/reminders/relative-time';
 import type {
   DashboardData,
   DashboardMonthPoint,
@@ -62,14 +63,6 @@ function shiftMonth(monthKey: string, months: number): string {
 function monthLabel(monthKey: string): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
     .format(new Date(`${monthKey}-01T00:00:00.000Z`));
-}
-
-function relativeTime(days: number): string {
-  if (days < -1) return `${Math.abs(days)} days overdue`;
-  if (days === -1) return '1 day overdue';
-  if (days === 0) return 'Due today';
-  if (days === 1) return '1 day left';
-  return `${days} days left`;
 }
 
 function presentDashboardReminder(
