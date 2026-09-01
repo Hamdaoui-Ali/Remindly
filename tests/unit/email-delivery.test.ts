@@ -33,6 +33,23 @@ describe('EmailDeliveryService', () => {
     expect(deps.circuit.success).toHaveBeenCalledOnce();
   });
 
+  it('uses an existing reminder reservation without creating a second attempt', async () => {
+    const deps = setup();
+    const service = createEmailDelivery(deps);
+
+    await expect(service.send('REMINDER', message, new Date(1), 'attempt-existing')).resolves.toEqual({
+      status: 'sent',
+      providerMessageId: 'gmail-1',
+    });
+    expect(deps.reserve).not.toHaveBeenCalled();
+    expect(deps.finalize).toHaveBeenCalledWith(
+      'attempt-existing',
+      'ACCEPTED',
+      expect.any(Date),
+      expect.objectContaining({ providerMessageId: 'gmail-1' }),
+    );
+  });
+
   it('does not call the provider when budget or circuit blocks delivery', async () => {
     const budget = setup();
     budget.reserve.mockResolvedValue(null);
