@@ -22,8 +22,15 @@ export function OverflowMenu({ children, label = 'Reminder actions' }: { childre
         close();
       }
     };
+    const closeOnAction = (event: MouseEvent) => {
+      if (popoverRef.current?.contains(event.target as Node)) close();
+    };
     document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
+    document.addEventListener('click', closeOnAction);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('click', closeOnAction);
+    };
   }, [open]);
 
   return (
@@ -39,7 +46,7 @@ export function OverflowMenu({ children, label = 'Reminder actions' }: { childre
       >
         <MoreVertical aria-hidden="true" size={20} strokeWidth={1.75} />
       </button>
-      {open ? <div ref={popoverRef} role="dialog" aria-label={label} className="overflow-menu__content" onClick={close}>{children}</div> : null}
+      {open ? <div ref={popoverRef} role="dialog" aria-label={label} className="overflow-menu__content">{children}</div> : null}
     </div>
   );
 }
