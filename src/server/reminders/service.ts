@@ -360,10 +360,10 @@ export class ReminderService {
       alertAt: firstAlert.scheduledFor,
       ...(parentReminderId ? { parentReminderId } : {}),
     };
-    const reminder = await new ReminderRepository(tx).create(
-      userId ? userId : reminderInput,
-      userId ? reminderInput : undefined,
-    );
+    const reminders = new ReminderRepository(tx);
+    const reminder = await (userId
+      ? reminders.createForUser(userId, reminderInput)
+      : reminders.create(reminderInput));
     const ledger = await createAlertsWithNotifications(tx, reminder.id, resolvedAlerts);
     const notification = ledger.notifications[0];
     if (!notification) throw new ReminderLifecycleError('A reminder requires at least one notification');
@@ -377,7 +377,9 @@ export class ReminderService {
     patch: MultiAlertUpdateReminderInput,
   ): Promise<ReminderMutationResult> {
     const reminders = new ReminderRepository(tx);
-    const current = requireReminderWithAlerts(await reminders.findByIdWithAlerts(userId ?? id, userId ? id : undefined));
+    const current = requireReminderWithAlerts(userId
+      ? await reminders.findByIdWithAlertsForUser(userId, id)
+      : await reminders.findByIdWithAlerts(id));
     assertEditable(current);
     if (!current.dueAt) throw new ReminderLifecycleError('Reminder deadline is not migrated');
     const timezone = configuredTimezone(userId
@@ -423,9 +425,11 @@ export class ReminderService {
       alertAt: firstAlert.scheduledFor,
     };
     await (userId
-      ? reminders.updateWhenStatus(userId, id, ['ACTIVE'], updateData)
+      ? reminders.updateWhenStatusForUser(userId, id, ['ACTIVE'], updateData)
       : reminders.updateWhenStatus(id, ['ACTIVE'], updateData));
-    const reminder = requireReminder(await reminders.findById(userId ?? id, userId ? id : undefined));
+    const reminder = requireReminder(userId
+      ? await reminders.findByIdForUser(userId, id)
+      : await reminders.findById(id));
     const notification = ledger.notifications[0]
       ?? await new NotificationRepository(tx).findForReminderSchedule(reminder.id, firstAlert.scheduledFor);
     return { reminder, notification, ...ledger };
