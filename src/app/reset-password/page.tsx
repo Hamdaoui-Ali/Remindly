@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useRef } from 'react';
 import { resetPasswordAction, type PasswordRecoveryState } from '@/app/forgot-password/actions';
+import { AuthField } from '@/components/auth/auth-field';
 import { AuthFeedback } from '@/components/auth/auth-feedback';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
@@ -25,14 +26,8 @@ export default function ResetPasswordPage() {
       footer={<p><Link href="/login">Back to sign in</Link></p>}
     >
         <form action={formAction} noValidate>
-          <div className="login-field">
-            <label htmlFor="password">New password</label>
-            <input ref={passwordRef} id="password" name="password" type="password" autoComplete="new-password" aria-invalid={state.field === 'password'} aria-describedby={state.error ? 'reset-password-error' : undefined} />
-          </div>
-          <div className="login-field">
-            <label htmlFor="confirmPassword">Confirm password</label>
-            <input ref={confirmRef} id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" aria-invalid={state.field === 'confirmPassword'} aria-describedby={state.error ? 'reset-password-error' : undefined} />
-          </div>
+          <AuthField inputRef={passwordRef} id="password" label="New password" name="password" type="password" autoComplete="new-password" aria-invalid={state.field === 'password'} aria-describedby={state.error ? 'reset-password-error' : undefined} />
+          <AuthField inputRef={confirmRef} id="confirmPassword" label="Confirm password" name="confirmPassword" type="password" autoComplete="new-password" aria-invalid={state.field === 'confirmPassword'} aria-describedby={state.error ? 'reset-password-error' : undefined} />
           <AuthFeedback error={state.error} errorId="reset-password-error" message={state.message} messageId="reset-password-message" />
           <AuthSubmitButton pendingLabel="Updating password..." label="Update password" />
         </form>

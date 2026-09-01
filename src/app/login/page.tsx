@@ -4,6 +4,7 @@ import { useActionState, useRef } from 'react';
 import Link from 'next/link';
 
 import { loginAction, type LoginState } from '@/app/login/actions';
+import { AuthField } from '@/components/auth/auth-field';
 import { AuthFeedback } from '@/components/auth/auth-feedback';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
@@ -26,33 +27,8 @@ export default function LoginPage() {
       footer={<><p><Link href="/forgot-password">Forgot your password?</Link></p><p><Link href="/register">Need an account? Create one</Link></p></>}
     >
         <form action={formAction} noValidate>
-          <div className="login-field">
-            <label htmlFor="email">Email</label>
-            <input
-              ref={emailRef}
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="username"
-              autoFocus={state.field === 'email'}
-              aria-invalid={state.field === 'email'}
-              aria-describedby={state.error ? 'login-error' : undefined}
-            />
-          </div>
-
-          <div className="login-field">
-            <label htmlFor="password">Password</label>
-            <input
-              ref={passwordRef}
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              autoFocus={state.field === 'password'}
-              aria-invalid={state.field === 'password'}
-              aria-describedby={state.error ? 'login-error' : undefined}
-            />
-          </div>
+          <AuthField inputRef={emailRef} id="email" label="Email" name="email" type="email" autoComplete="username" autoFocus={state.field === 'email'} aria-invalid={state.field === 'email'} aria-describedby={state.error ? 'login-error' : undefined} />
+          <AuthField inputRef={passwordRef} id="password" label="Password" name="password" type="password" autoComplete="current-password" autoFocus={state.field === 'password'} aria-invalid={state.field === 'password'} aria-describedby={state.error ? 'login-error' : undefined} />
 
           <AuthFeedback error={state.error} errorId="login-error" message={null} messageId="login-message" />
           <AuthSubmitButton pendingLabel="Signing in..." label="Sign in" />
