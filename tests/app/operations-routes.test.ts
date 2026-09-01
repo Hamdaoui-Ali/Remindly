@@ -15,7 +15,13 @@ const {
 }));
 
 vi.mock('@/server/db/client', () => ({
-  prisma: { $queryRaw: databaseProbe },
+  prisma: {
+    $queryRaw: databaseProbe,
+    processorRun: {
+      create: vi.fn(async () => ({ id: 'run-1' })),
+      update: vi.fn(async () => ({ id: 'run-1' })),
+    },
+  },
 }));
 vi.mock('@/server/notifications/processor', () => ({ processDueNotifications }));
 vi.mock('@/server/email/resend-provider', () => ({

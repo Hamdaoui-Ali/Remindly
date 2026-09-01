@@ -5,6 +5,8 @@ import { GmailEmailProvider } from '@/server/email/gmail-provider';
 import { GmailOAuthClient } from '@/server/email/gmail-oauth';
 import { ResendEmailProvider } from '@/server/email/resend-provider';
 import { processDueNotifications } from '@/server/notifications/processor';
+import { completeProcessorRun, startProcessorRun } from '@/server/notifications/processor-run';
+import { prisma } from '@/server/db/client';
 
 const PROCESSOR_BATCH_LIMIT = 50;
 
@@ -51,7 +53,10 @@ export async function POST(request: Request) {
     );
   }
 
+  let processorRunId: string | null = null;
   try {
+    const run = await startProcessorRun(prisma, new Date());
+    processorRunId = run.id;
     const provider = env.EMAIL_PROVIDER === 'gmail'
       ? new GmailEmailProvider({
         from: `${env.GMAIL_SENDER_NAME} <${env.GMAIL_SENDER_EMAIL}>`,
@@ -71,10 +76,16 @@ export async function POST(request: Request) {
       limit: PROCESSOR_BATCH_LIMIT,
       provider,
     });
+    await completeProcessorRun(prisma, processorRunId, 'SUCCEEDED', counts, new Date());
 
     console.info('notification-processor completed', { runId, ...counts });
     return Response.json(counts);
   } catch {
+    if (processorRunId) {
+      await completeProcessorRun(prisma, processorRunId, 'FAILED', {
+        claimed: 0, sent: 0, failed: 0, recovered: 0,
+      }, new Date(), 'notification_processor_failed').catch(() => undefined);
+    }
     console.error('notification-processor failed', { runId });
     return Response.json(
       { error: 'Notification processing failed' },
