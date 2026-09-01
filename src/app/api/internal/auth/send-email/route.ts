@@ -51,11 +51,15 @@ export async function POST(request: Request) {
     return failure(400);
   }
 
+  let timedOut = false;
   try {
     const delivery = createConfiguredEmailDelivery();
     const timeout = env.GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS;
     const controller = new AbortController();
-    const deadline = setTimeout(() => controller.abort(), timeout);
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeout);
     try {
       const result = await delivery.send('AUTH', { ...email, signal: controller.signal });
       if (result.status === 'blocked') return failure(429);
@@ -65,7 +69,9 @@ export async function POST(request: Request) {
       clearTimeout(deadline);
     }
   } catch (error) {
-    const message = error instanceof Error && error.message === 'auth_hook_timeout' ? 'timeout' : 'failure';
+    const message = timedOut || (error instanceof Error && error.message === 'auth_hook_timeout')
+      ? 'timeout'
+      : 'failure';
     console.error('auth-email-hook failed', { runId, durationMs: Date.now() - startedAt, code: message });
     return failure(503);
   }
