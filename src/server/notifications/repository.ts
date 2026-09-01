@@ -164,6 +164,33 @@ export class NotificationRepository {
     return result.count;
   }
 
+  async cancelIneligibleAlertNotifications(now: Date): Promise<number> {
+    const result = await this.db.$executeRaw`
+      UPDATE notifications AS notification
+      SET status = 'CANCELLED'::"NotificationStatus",
+          next_attempt_at = NULL,
+          processing_started_at = NULL,
+          updated_at = ${now}
+      WHERE notification.status = 'PENDING'::"NotificationStatus"
+        AND notification.reminder_alert_id IS NOT NULL
+        AND notification.scheduled_for <= ${now}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM reminder_alerts AS alert
+          JOIN reminders AS reminder ON reminder.id = alert.reminder_id
+          JOIN user_profiles AS profile ON profile.id = reminder.user_id
+          WHERE alert.id = notification.reminder_alert_id
+            AND reminder.status = 'ACTIVE'::"ReminderStatus"
+            AND alert.enabled = TRUE
+            AND notification.schedule_version = alert.schedule_version
+            AND notification.scheduled_for = alert.scheduled_for
+            AND profile.email IS NOT NULL
+            AND profile.email_verified_at IS NOT NULL
+        )
+    `;
+    return Number(result);
+  }
+
   findDueCandidates(query: DueNotificationCandidatesQuery): Promise<Notification[]> {
     return this.db.notification.findMany({
       where: {
