@@ -5,6 +5,7 @@ import type {
   Prisma,
   PrismaClient,
 } from '@/generated/prisma/client';
+import { evaluateEmailBudget, GMAIL_BUDGET_ADVISORY_LOCK_KEY, EMAIL_BUDGET_WINDOW_MILLISECONDS, type EmailBudgetPolicy } from './budget';
 
 export type NotificationDatabase = PrismaClient | Prisma.TransactionClient;
 
@@ -78,6 +79,7 @@ export interface MissingNotificationReconciliation {
 
 export interface ClaimedNotification extends Notification {
   recovered: boolean;
+  emailSendAttemptId?: string;
 }
 
 export type NotificationWithReminder = Prisma.NotificationGetPayload<{
@@ -240,6 +242,36 @@ export class NotificationRepository {
         notification.updated_at AS "updatedAt",
         (candidates.original_status = ${input.processingStatus}::"NotificationStatus") AS recovered
     `;
+  }
+
+  async claimDueWithBudget(input: AtomicDueClaim, policy: EmailBudgetPolicy): Promise<ClaimedNotification[]> {
+    await this.db.$executeRaw`SELECT pg_advisory_xact_lock(${GMAIL_BUDGET_ADVISORY_LOCK_KEY})`;
+    const since = new Date(input.now.getTime() - EMAIL_BUDGET_WINDOW_MILLISECONDS);
+    const outcomes = ['RESERVED', 'ACCEPTED', 'UNKNOWN_OUTCOME'] as const;
+    const [total, reminder, auth] = await Promise.all([
+      this.db.emailSendAttempt.count({ where: { attemptedAt: { gte: since }, outcome: { in: [...outcomes] } } }),
+      this.db.emailSendAttempt.count({ where: { attemptedAt: { gte: since }, outcome: { in: [...outcomes] }, purpose: 'REMINDER' } }),
+      this.db.emailSendAttempt.count({ where: { attemptedAt: { gte: since }, outcome: { in: [...outcomes] }, purpose: 'AUTH' } }),
+    ]);
+    const decision = evaluateEmailBudget(policy, { total, reminder, auth }, 'REMINDER', input.limit);
+    if (decision.claimLimit === 0) return [];
+
+    const claimed = await this.claimDue({ ...input, limit: decision.claimLimit });
+    if (claimed.length === 0) return claimed;
+    const reservations = await Promise.all(claimed.map((notification) => this.db.emailSendAttempt.create({
+      data: {
+        purpose: 'REMINDER',
+        outcome: 'RESERVED',
+        attemptedAt: input.now,
+        notificationId: notification.id,
+      },
+      select: { id: true, notificationId: true },
+    })));
+    const reservationIds = new Map(reservations.map((reservation) => [reservation.notificationId, reservation.id]));
+    return claimed.map((notification) => ({
+      ...notification,
+      emailSendAttemptId: reservationIds.get(notification.id),
+    }));
   }
 
   findClaimedWithReminder(id: string): Promise<NotificationWithReminder | null> {

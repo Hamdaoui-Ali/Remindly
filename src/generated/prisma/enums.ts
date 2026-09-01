@@ -61,3 +61,12 @@ export const ProcessorRunStatus = {
 } as const
 
 export type ProcessorRunStatus = (typeof ProcessorRunStatus)[keyof typeof ProcessorRunStatus]
+
+
+export const GmailCircuitStateStatus = {
+  CLOSED: 'CLOSED',
+  OPEN: 'OPEN',
+  HALF_OPEN: 'HALF_OPEN'
+} as const
+
+export type GmailCircuitStateStatus = (typeof GmailCircuitStateStatus)[keyof typeof GmailCircuitStateStatus]

@@ -43,6 +43,12 @@ enum ProcessorRunStatus {
   FAILED
 }
 
+enum GmailCircuitStateStatus {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
 model UserProfile {
   id               String    @id @db.Uuid
   email            String    @unique
@@ -136,6 +142,7 @@ model Notification {
 
 model EmailSendAttempt {
   id                String              @id @default(uuid()) @db.Uuid
+  notificationId    String?             @map("notification_id") @db.Uuid
   purpose           EmailPurpose
   outcome           EmailAttemptOutcome @default(RESERVED)
   sanitizedCode     String?             @map("sanitized_code")
@@ -144,6 +151,7 @@ model EmailSendAttempt {
   completedAt       DateTime?           @map("completed_at") @db.Timestamptz(6)
 
   @@index([attemptedAt, purpose, outcome])
+  @@unique([notificationId])
   @@map("email_send_attempts")
 }
 
@@ -160,6 +168,18 @@ model ProcessorRun {
 
   @@index([status, startedAt])
   @@map("processor_runs")
+}
+
+model GmailCircuitState {
+  id               String                 @id
+  state            GmailCircuitStateStatus @default(CLOSED)
+  failureCount     Int                    @default(0) @map("failure_count")
+  openedAt         DateTime?              @map("opened_at") @db.Timestamptz(6)
+  lastFailureCode  String?                @map("last_failure_code")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("gmail_circuit_state")
 }
 
 model Settings {

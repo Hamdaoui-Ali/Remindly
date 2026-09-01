@@ -358,6 +358,23 @@ export type EnumProcessorRunStatusWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumProcessorRunStatusFilter<$PrismaModel>
 }
 
+export type EnumGmailCircuitStateStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.GmailCircuitStateStatus | Prisma.EnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumGmailCircuitStateStatusFilter<$PrismaModel> | $Enums.GmailCircuitStateStatus
+}
+
+export type EnumGmailCircuitStateStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.GmailCircuitStateStatus | Prisma.EnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumGmailCircuitStateStatusWithAggregatesFilter<$PrismaModel> | $Enums.GmailCircuitStateStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumGmailCircuitStateStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumGmailCircuitStateStatusFilter<$PrismaModel>
+}
+
 export type NestedUuidFilter<$PrismaModel = never> = {
   equals?: string | Prisma.StringFieldRefInput<$PrismaModel>
   in?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
@@ -709,6 +726,23 @@ export type NestedEnumProcessorRunStatusWithAggregatesFilter<$PrismaModel = neve
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumProcessorRunStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumProcessorRunStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumGmailCircuitStateStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.GmailCircuitStateStatus | Prisma.EnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumGmailCircuitStateStatusFilter<$PrismaModel> | $Enums.GmailCircuitStateStatus
+}
+
+export type NestedEnumGmailCircuitStateStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.GmailCircuitStateStatus | Prisma.EnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.GmailCircuitStateStatus[] | Prisma.ListEnumGmailCircuitStateStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumGmailCircuitStateStatusWithAggregatesFilter<$PrismaModel> | $Enums.GmailCircuitStateStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumGmailCircuitStateStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumGmailCircuitStateStatusFilter<$PrismaModel>
 }
 
 

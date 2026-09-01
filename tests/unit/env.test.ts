@@ -39,4 +39,17 @@ describe('parseServerEnv', () => {
     expect(env.DATABASE_URL).toBe('postgresql://pooler.example/remindly');
     expect(env.DIRECT_URL).toBe('postgresql://direct.example/remindly');
   });
+
+  it('requires complete Gmail configuration when Gmail is selected', () => {
+    expect(() => parseServerEnv({
+      DATABASE_URL: 'postgresql://pooler.example/remindly',
+      DIRECT_URL: 'postgresql://direct.example/remindly',
+      SCHEDULER_SECRET: 's'.repeat(16),
+      RESEND_API_KEY: 're_test',
+      RESEND_FROM: 'Remindly <notifications@example.com>',
+      EMAIL_PROVIDER: 'gmail',
+      APP_URL: 'http://localhost:3000',
+      NODE_ENV: 'test',
+    })).toThrow('GMAIL_CLIENT_ID');
+  });
 });

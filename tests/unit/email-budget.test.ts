@@ -112,13 +112,13 @@ describe('durable email budget adapter', () => {
           calls.push(`count:${where.purpose ?? 'total'}`);
           return where.purpose === 'REMINDER' ? 2 : where.purpose === 'AUTH' ? 1 : 3;
         },
-        create: async () => { calls.push('create'); return { id: 'attempt-1' }; },
+        create: async ({ data }: { data: { notificationId?: string } }) => { calls.push(`create:${data.notificationId ?? 'auth'}`); return { id: 'attempt-1' }; },
         update: async () => undefined,
       },
     } as never;
 
-    await expect(reserveEmailSend(tx, policy, 'REMINDER', new Date())).resolves.toEqual({ id: 'attempt-1' });
-    expect(calls).toEqual(['lock', 'count:total', 'count:REMINDER', 'count:AUTH', 'create']);
+    await expect(reserveEmailSend(tx, policy, 'REMINDER', new Date(), 'notification-1')).resolves.toEqual({ id: 'attempt-1' });
+    expect(calls).toEqual(['lock', 'count:total', 'count:REMINDER', 'count:AUTH', 'create:notification-1']);
   });
 
   it('does not create a reservation after the total budget is exhausted', async () => {

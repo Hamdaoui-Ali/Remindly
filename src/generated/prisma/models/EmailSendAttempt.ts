@@ -26,6 +26,7 @@ export type AggregateEmailSendAttempt = {
 
 export type EmailSendAttemptMinAggregateOutputType = {
   id: string | null
+  notificationId: string | null
   purpose: $Enums.EmailPurpose | null
   outcome: $Enums.EmailAttemptOutcome | null
   sanitizedCode: string | null
@@ -36,6 +37,7 @@ export type EmailSendAttemptMinAggregateOutputType = {
 
 export type EmailSendAttemptMaxAggregateOutputType = {
   id: string | null
+  notificationId: string | null
   purpose: $Enums.EmailPurpose | null
   outcome: $Enums.EmailAttemptOutcome | null
   sanitizedCode: string | null
@@ -46,6 +48,7 @@ export type EmailSendAttemptMaxAggregateOutputType = {
 
 export type EmailSendAttemptCountAggregateOutputType = {
   id: number
+  notificationId: number
   purpose: number
   outcome: number
   sanitizedCode: number
@@ -58,6 +61,7 @@ export type EmailSendAttemptCountAggregateOutputType = {
 
 export type EmailSendAttemptMinAggregateInputType = {
   id?: true
+  notificationId?: true
   purpose?: true
   outcome?: true
   sanitizedCode?: true
@@ -68,6 +72,7 @@ export type EmailSendAttemptMinAggregateInputType = {
 
 export type EmailSendAttemptMaxAggregateInputType = {
   id?: true
+  notificationId?: true
   purpose?: true
   outcome?: true
   sanitizedCode?: true
@@ -78,6 +83,7 @@ export type EmailSendAttemptMaxAggregateInputType = {
 
 export type EmailSendAttemptCountAggregateInputType = {
   id?: true
+  notificationId?: true
   purpose?: true
   outcome?: true
   sanitizedCode?: true
@@ -161,6 +167,7 @@ export type EmailSendAttemptGroupByArgs<ExtArgs extends runtime.Types.Extensions
 
 export type EmailSendAttemptGroupByOutputType = {
   id: string
+  notificationId: string | null
   purpose: $Enums.EmailPurpose
   outcome: $Enums.EmailAttemptOutcome
   sanitizedCode: string | null
@@ -192,6 +199,7 @@ export type EmailSendAttemptWhereInput = {
   OR?: Prisma.EmailSendAttemptWhereInput[]
   NOT?: Prisma.EmailSendAttemptWhereInput | Prisma.EmailSendAttemptWhereInput[]
   id?: Prisma.UuidFilter<"EmailSendAttempt"> | string
+  notificationId?: Prisma.UuidNullableFilter<"EmailSendAttempt"> | string | null
   purpose?: Prisma.EnumEmailPurposeFilter<"EmailSendAttempt"> | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeFilter<"EmailSendAttempt"> | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.StringNullableFilter<"EmailSendAttempt"> | string | null
@@ -202,6 +210,7 @@ export type EmailSendAttemptWhereInput = {
 
 export type EmailSendAttemptOrderByWithRelationInput = {
   id?: Prisma.SortOrder
+  notificationId?: Prisma.SortOrderInput | Prisma.SortOrder
   purpose?: Prisma.SortOrder
   outcome?: Prisma.SortOrder
   sanitizedCode?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -212,6 +221,7 @@ export type EmailSendAttemptOrderByWithRelationInput = {
 
 export type EmailSendAttemptWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  notificationId?: string
   AND?: Prisma.EmailSendAttemptWhereInput | Prisma.EmailSendAttemptWhereInput[]
   OR?: Prisma.EmailSendAttemptWhereInput[]
   NOT?: Prisma.EmailSendAttemptWhereInput | Prisma.EmailSendAttemptWhereInput[]
@@ -221,10 +231,11 @@ export type EmailSendAttemptWhereUniqueInput = Prisma.AtLeast<{
   providerMessageId?: Prisma.StringNullableFilter<"EmailSendAttempt"> | string | null
   attemptedAt?: Prisma.DateTimeFilter<"EmailSendAttempt"> | Date | string
   completedAt?: Prisma.DateTimeNullableFilter<"EmailSendAttempt"> | Date | string | null
-}, "id">
+}, "id" | "notificationId">
 
 export type EmailSendAttemptOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
+  notificationId?: Prisma.SortOrderInput | Prisma.SortOrder
   purpose?: Prisma.SortOrder
   outcome?: Prisma.SortOrder
   sanitizedCode?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -241,6 +252,7 @@ export type EmailSendAttemptScalarWhereWithAggregatesInput = {
   OR?: Prisma.EmailSendAttemptScalarWhereWithAggregatesInput[]
   NOT?: Prisma.EmailSendAttemptScalarWhereWithAggregatesInput | Prisma.EmailSendAttemptScalarWhereWithAggregatesInput[]
   id?: Prisma.UuidWithAggregatesFilter<"EmailSendAttempt"> | string
+  notificationId?: Prisma.UuidNullableWithAggregatesFilter<"EmailSendAttempt"> | string | null
   purpose?: Prisma.EnumEmailPurposeWithAggregatesFilter<"EmailSendAttempt"> | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeWithAggregatesFilter<"EmailSendAttempt"> | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.StringNullableWithAggregatesFilter<"EmailSendAttempt"> | string | null
@@ -251,6 +263,7 @@ export type EmailSendAttemptScalarWhereWithAggregatesInput = {
 
 export type EmailSendAttemptCreateInput = {
   id?: string
+  notificationId?: string | null
   purpose: $Enums.EmailPurpose
   outcome?: $Enums.EmailAttemptOutcome
   sanitizedCode?: string | null
@@ -261,6 +274,7 @@ export type EmailSendAttemptCreateInput = {
 
 export type EmailSendAttemptUncheckedCreateInput = {
   id?: string
+  notificationId?: string | null
   purpose: $Enums.EmailPurpose
   outcome?: $Enums.EmailAttemptOutcome
   sanitizedCode?: string | null
@@ -271,6 +285,7 @@ export type EmailSendAttemptUncheckedCreateInput = {
 
 export type EmailSendAttemptUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  notificationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   purpose?: Prisma.EnumEmailPurposeFieldUpdateOperationsInput | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeFieldUpdateOperationsInput | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -281,6 +296,7 @@ export type EmailSendAttemptUpdateInput = {
 
 export type EmailSendAttemptUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  notificationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   purpose?: Prisma.EnumEmailPurposeFieldUpdateOperationsInput | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeFieldUpdateOperationsInput | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -291,6 +307,7 @@ export type EmailSendAttemptUncheckedUpdateInput = {
 
 export type EmailSendAttemptCreateManyInput = {
   id?: string
+  notificationId?: string | null
   purpose: $Enums.EmailPurpose
   outcome?: $Enums.EmailAttemptOutcome
   sanitizedCode?: string | null
@@ -301,6 +318,7 @@ export type EmailSendAttemptCreateManyInput = {
 
 export type EmailSendAttemptUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  notificationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   purpose?: Prisma.EnumEmailPurposeFieldUpdateOperationsInput | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeFieldUpdateOperationsInput | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -311,6 +329,7 @@ export type EmailSendAttemptUpdateManyMutationInput = {
 
 export type EmailSendAttemptUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  notificationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   purpose?: Prisma.EnumEmailPurposeFieldUpdateOperationsInput | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeFieldUpdateOperationsInput | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -321,6 +340,7 @@ export type EmailSendAttemptUncheckedUpdateManyInput = {
 
 export type EmailSendAttemptCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  notificationId?: Prisma.SortOrder
   purpose?: Prisma.SortOrder
   outcome?: Prisma.SortOrder
   sanitizedCode?: Prisma.SortOrder
@@ -331,6 +351,7 @@ export type EmailSendAttemptCountOrderByAggregateInput = {
 
 export type EmailSendAttemptMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  notificationId?: Prisma.SortOrder
   purpose?: Prisma.SortOrder
   outcome?: Prisma.SortOrder
   sanitizedCode?: Prisma.SortOrder
@@ -341,6 +362,7 @@ export type EmailSendAttemptMaxOrderByAggregateInput = {
 
 export type EmailSendAttemptMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  notificationId?: Prisma.SortOrder
   purpose?: Prisma.SortOrder
   outcome?: Prisma.SortOrder
   sanitizedCode?: Prisma.SortOrder
@@ -361,6 +383,7 @@ export type EnumEmailAttemptOutcomeFieldUpdateOperationsInput = {
 
 export type EmailSendAttemptSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  notificationId?: boolean
   purpose?: boolean
   outcome?: boolean
   sanitizedCode?: boolean
@@ -371,6 +394,7 @@ export type EmailSendAttemptSelect<ExtArgs extends runtime.Types.Extensions.Inte
 
 export type EmailSendAttemptSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  notificationId?: boolean
   purpose?: boolean
   outcome?: boolean
   sanitizedCode?: boolean
@@ -381,6 +405,7 @@ export type EmailSendAttemptSelectCreateManyAndReturn<ExtArgs extends runtime.Ty
 
 export type EmailSendAttemptSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  notificationId?: boolean
   purpose?: boolean
   outcome?: boolean
   sanitizedCode?: boolean
@@ -391,6 +416,7 @@ export type EmailSendAttemptSelectUpdateManyAndReturn<ExtArgs extends runtime.Ty
 
 export type EmailSendAttemptSelectScalar = {
   id?: boolean
+  notificationId?: boolean
   purpose?: boolean
   outcome?: boolean
   sanitizedCode?: boolean
@@ -399,13 +425,14 @@ export type EmailSendAttemptSelectScalar = {
   completedAt?: boolean
 }
 
-export type EmailSendAttemptOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "purpose" | "outcome" | "sanitizedCode" | "providerMessageId" | "attemptedAt" | "completedAt", ExtArgs["result"]["emailSendAttempt"]>
+export type EmailSendAttemptOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "notificationId" | "purpose" | "outcome" | "sanitizedCode" | "providerMessageId" | "attemptedAt" | "completedAt", ExtArgs["result"]["emailSendAttempt"]>
 
 export type $EmailSendAttemptPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "EmailSendAttempt"
   objects: {}
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
+    notificationId: string | null
     purpose: $Enums.EmailPurpose
     outcome: $Enums.EmailAttemptOutcome
     sanitizedCode: string | null
@@ -836,6 +863,7 @@ export interface Prisma__EmailSendAttemptClient<T, Null = never, ExtArgs extends
  */
 export interface EmailSendAttemptFieldRefs {
   readonly id: Prisma.FieldRef<"EmailSendAttempt", 'String'>
+  readonly notificationId: Prisma.FieldRef<"EmailSendAttempt", 'String'>
   readonly purpose: Prisma.FieldRef<"EmailSendAttempt", 'EmailPurpose'>
   readonly outcome: Prisma.FieldRef<"EmailSendAttempt", 'EmailAttemptOutcome'>
   readonly sanitizedCode: Prisma.FieldRef<"EmailSendAttempt", 'String'>

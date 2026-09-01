@@ -16,6 +16,7 @@ export interface EmailBudgetRepository {
     purpose: EmailPurpose;
     outcome: 'RESERVED';
     attemptedAt: Date;
+    notificationId?: string;
   }}): Promise<{ id: string }>;
   update(args: { where: { id: string }; data: {
     outcome: EmailAttemptOutcome;
@@ -42,6 +43,7 @@ export async function reserveEmailSend(
   policy: EmailBudgetPolicy,
   purpose: 'REMINDER' | 'AUTH',
   now: Date,
+  notificationId?: string,
 ): Promise<{ id: string } | null> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${GMAIL_BUDGET_ADVISORY_LOCK_KEY})`;
   const since = new Date(now.getTime() - EMAIL_BUDGET_WINDOW_MILLISECONDS);
@@ -52,7 +54,7 @@ export async function reserveEmailSend(
   const auth = await tx.emailSendAttempt.count({ where: { ...base, purpose: 'AUTH' } });
   const decision = evaluateEmailBudget(policy, { total, reminder, auth }, purpose, 1);
   if (!decision.allowed) return null;
-  return tx.emailSendAttempt.create({ data: { purpose, outcome: 'RESERVED', attemptedAt: now } });
+  return tx.emailSendAttempt.create({ data: { purpose, outcome: 'RESERVED', attemptedAt: now, notificationId } });
 }
 
 export function finalizeEmailSend(

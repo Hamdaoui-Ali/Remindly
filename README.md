@@ -204,6 +204,13 @@ the next integration slice.
 
 ### Scheduled trigger
 
+The hosted Supabase schedule is defined in
+`infra/supabase/002-cron-notification-processor.sql`. Apply it only after
+storing `remindly_app_url` and `remindly_scheduler_secret` in Supabase Vault.
+It schedules the protected processor every minute and never embeds either
+secret in Git. Because `pg_net` is asynchronous, inspect its request result
+and the application's `ProcessorRun` heartbeat separately.
+
 The workflow in `.github/workflows/process-due-notifications.yml` calls the processor every ten minutes and can also be run manually. Add these encrypted GitHub repository secrets:
 
 - `APP_URL`: the canonical deployed origin, such as `https://remindly.example.com`
