@@ -44,6 +44,26 @@ function toDatabaseDate(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+type LegacyReminderSchedule = Pick<LegacyCreateReminderInput, 'name' | 'endDate' | 'leadDays' | 'alertTime'>;
+
+export function buildLegacyReminderUpdateData(
+  input: LegacyReminderSchedule,
+  alertAt: Date,
+  scheduleChanged: boolean,
+): Prisma.ReminderUpdateManyMutationInput {
+  return {
+    name: input.name,
+    ...(scheduleChanged
+      ? {
+          endDate: toDatabaseDate(input.endDate),
+          alertLeadDays: input.leadDays,
+          alertTime: input.alertTime,
+          alertAt,
+        }
+      : {}),
+  };
+}
+
 function configuredTimezone(settings: { timezone: string } | null): string {
   if (!settings) throw new ReminderLifecycleError('Reminder settings are not configured');
   try {
@@ -181,29 +201,10 @@ export class ReminderService {
       const scheduleChanged = next.validated.endDate !== dateOnly(current.endDate)
         || next.validated.leadDays !== current.alertLeadDays
         || next.validated.alertTime !== current.alertTime;
+      const updateData = buildLegacyReminderUpdateData(next.validated, next.alertAt, scheduleChanged);
       requireActiveTransition(await (userId
-        ? reminders.updateWhenStatus(userId, id, ['ACTIVE'], {
-          name: next.validated.name,
-          ...(scheduleChanged
-            ? {
-                endDate: toDatabaseDate(next.validated.endDate),
-                alertLeadDays: next.validated.leadDays,
-                alertTime: next.validated.alertTime,
-                alertAt: next.alertAt,
-              }
-            : {}),
-        })
-        : reminders.updateWhenStatus(id, ['ACTIVE'], {
-        name: next.validated.name,
-        ...(scheduleChanged
-          ? {
-              endDate: toDatabaseDate(next.validated.endDate),
-              alertLeadDays: next.validated.leadDays,
-              alertTime: next.validated.alertTime,
-              alertAt: next.alertAt,
-          }
-          : {}),
-          }))); 
+        ? reminders.updateWhenStatus(userId, id, ['ACTIVE'], updateData)
+        : reminders.updateWhenStatus(id, ['ACTIVE'], updateData)));
 
       let notification;
       if (scheduleChanged) {
