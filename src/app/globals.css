@@ -193,6 +193,11 @@ button { cursor: pointer; }
 .sidebar__owner span { display: grid; gap: 2px; min-width: 0; }
 .sidebar__owner strong { font-size: 13px; font-weight: 500; }
 .sidebar__owner small { overflow: hidden; color: #cfd7e1; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar__sign-out { display: grid; gap: 6px; margin-top: 16px; }
+.sidebar__sign-out button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 10px 8px; border: 1px solid #40505e; border-radius: 6px; background: transparent; color: var(--sidebar-text); font: inherit; text-align: left; }
+.sidebar__sign-out button:hover:not(:disabled) { background: var(--sidebar-hover); }
+.sidebar__sign-out button:disabled { cursor: wait; opacity: .7; }
+.sidebar__sign-out p { margin: 0; color: #ffb4ad; font-size: 12px; }
 
 .app-shell__content { min-height: 100vh; margin-left: 224px; padding: 32px; }
 .mobile-nav { display: none; }
