@@ -79,6 +79,7 @@ export default function LoginPage() {
 
           <SubmitButton />
         </form>
+        <p><Link href="/forgot-password">Forgot your password?</Link></p>
         <p><Link href="/register">Need an account? Create one</Link></p>
       </section>
     </main>
