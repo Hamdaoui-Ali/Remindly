@@ -42,6 +42,12 @@ export function calculateNextAttempt(attemptCount: number, now: Date): Date | nu
   return new Date(now.getTime() + RETRY_DELAYS_MILLISECONDS[attemptCount]);
 }
 
+export function requiresLegacySettings(
+  claims: Array<Pick<ClaimedNotification, 'reminderAlertId'>>,
+): boolean {
+  return claims.some((claim) => claim.reminderAlertId === null);
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -238,7 +244,9 @@ export async function processDueNotifications(
     processingStatus: 'PROCESSING',
     claimedStatus: 'PROCESSING',
   }, budgetPolicy));
-  const settings = await new SettingsRepository(prisma).getSingleton();
+  const settings = requiresLegacySettings(claimed)
+    ? await new SettingsRepository(prisma).getSingleton()
+    : null;
   const result: ProcessDueNotificationsResult = {
     claimed: claimed.length,
     sent: 0,

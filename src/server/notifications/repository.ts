@@ -228,6 +228,7 @@ export class NotificationRepository {
       RETURNING
         notification.id,
         notification.reminder_id AS "reminderId",
+        notification.reminder_alert_id AS "reminderAlertId",
         notification.scheduled_for AS "scheduledFor",
         notification.channel::text AS channel,
         notification.status::text AS status,
