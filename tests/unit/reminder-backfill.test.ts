@@ -96,8 +96,16 @@ describe('legacy reminder backfill', () => {
       alertId: 'alert-1',
     });
 
-    expect(plan.alert).toBeNull();
-    expect(plan.issues).toContain('missing_notification');
+    expect(plan.notificationCreate).toMatchObject({
+      id: expect.any(String),
+      reminderId: reminder.id,
+      reminderAlertId: 'alert-1',
+      scheduledFor: reminder.alertAt,
+      scheduleVersion: 1,
+      channel: 'EMAIL',
+      status: 'PENDING',
+    });
+    expect(plan.issues).toEqual([]);
   });
 
   it('fails cutover verification when counts or integrity checks do not reconcile', () => {

@@ -36,6 +36,16 @@ export interface LegacyBackfillPlan {
     offsetMinutes: number;
     scheduleVersion: 1;
   } | null;
+  notificationCreate: {
+    id: string;
+    reminderId: string;
+    reminderAlertId: string;
+    scheduledFor: Date;
+    scheduleVersion: 1;
+    channel: 'EMAIL';
+    status: 'PENDING';
+    idempotencyKey: string;
+  } | null;
   notificationUpdates: Array<{
     id: string;
     reminderAlertId: string;
@@ -87,14 +97,19 @@ export function buildLegacyBackfillPlan(input: {
   }
 
   if (issues.length > 0) {
-    return { dueAt: null, alert: null, notificationUpdates: [], issues };
+    return { dueAt: null, alert: null, notificationCreate: null, notificationUpdates: [], issues };
   }
 
   let dueAt: Date;
   try {
     dueAt = dueAtForLegacyDate(reminder.endDate, input.timezone);
   } catch {
-    return { dueAt: null, alert: null, notificationUpdates: [], issues: ['invalid_reminder'] };
+    return { dueAt: null, alert: null, notificationCreate: null, notificationUpdates: [], issues: ['invalid_reminder'] };
+  }
+
+  const offsetMinutes = Math.round((dueAt.getTime() - reminder.alertAt.getTime()) / 60_000);
+  if (offsetMinutes <= 0) {
+    return { dueAt: null, alert: null, notificationCreate: null, notificationUpdates: [], issues: ['invalid_reminder'] };
   }
 
   const matching = input.notifications.filter((notification) => (
@@ -103,15 +118,31 @@ export function buildLegacyBackfillPlan(input: {
   ));
 
   if (matching.length === 0) {
-    return { dueAt, alert: null, notificationUpdates: [], issues: ['missing_notification'] };
+    return {
+      dueAt,
+      alert: {
+        id: input.alertId,
+        reminderId: reminder.id,
+        scheduledFor: reminder.alertAt,
+        offsetMinutes,
+        scheduleVersion: 1,
+      },
+      notificationCreate: {
+        id: crypto.randomUUID(),
+        reminderId: reminder.id,
+        reminderAlertId: input.alertId,
+        scheduledFor: reminder.alertAt,
+        scheduleVersion: 1,
+        channel: 'EMAIL',
+        status: 'PENDING',
+        idempotencyKey: crypto.randomUUID(),
+      },
+      notificationUpdates: [],
+      issues,
+    };
   }
   if (matching.length > 1) {
-    return { dueAt, alert: null, notificationUpdates: [], issues: ['mismatched_notification'] };
-  }
-
-  const offsetMinutes = Math.round((dueAt.getTime() - reminder.alertAt.getTime()) / 60_000);
-  if (offsetMinutes <= 0) {
-    return { dueAt: null, alert: null, notificationUpdates: [], issues: ['invalid_reminder'] };
+    return { dueAt, alert: null, notificationCreate: null, notificationUpdates: [], issues: ['mismatched_notification'] };
   }
 
   return {
@@ -123,6 +154,7 @@ export function buildLegacyBackfillPlan(input: {
       offsetMinutes,
       scheduleVersion: 1,
     },
+    notificationCreate: null,
     notificationUpdates: [{
       id: matching[0].id,
       reminderAlertId: input.alertId,
