@@ -3,6 +3,7 @@ import type { ReminderCycle, ReminderListItem, ReminderMutationResult, ReminderW
 import type { Urgency } from '@/server/urgency/types';
 import { calendarDayDifference } from '@/server/urgency/calendar';
 import { calculateUrgency } from '@/server/urgency/urgency';
+import { relativeTime } from './relative-time';
 
 const URGENCY_RANK: Record<Urgency, number> = {
   OVERDUE: 0,
@@ -50,14 +51,6 @@ export interface ReminderListPresentation extends ReminderPresentation {
 
 function dateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
-}
-
-function relativeTime(days: number): string {
-  if (days < -1) return `${Math.abs(days)} days overdue`;
-  if (days === -1) return '1 day overdue';
-  if (days === 0) return 'Due today';
-  if (days === 1) return '1 day left';
-  return `${days} days left`;
 }
 
 function notificationLabel(scheduledFor: Date, timezone: string): string {

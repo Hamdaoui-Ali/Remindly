@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useActionState, useRef } from 'react';
 import { resetPasswordAction, type PasswordRecoveryState } from '@/app/forgot-password/actions';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthFeedback } from '@/components/auth/auth-feedback';
-import { AuthShell } from '@/components/auth/auth-shell';
+import { PasswordRecoveryShell } from '@/components/auth/password-recovery-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
 import { useAuthFieldFocus } from '@/components/auth/use-auth-field-focus';
 
@@ -19,11 +18,10 @@ export default function ResetPasswordPage() {
   useAuthFieldFocus(state.field, state.attempt, { password: passwordRef, confirmPassword: confirmRef });
 
   return (
-    <AuthShell
+    <PasswordRecoveryShell
       title="Choose a new password"
       description="Use at least eight characters for your new password."
       labelledBy="reset-password-title"
-      footer={<p><Link href="/login">Back to sign in</Link></p>}
     >
         <form action={formAction} noValidate>
           <AuthField inputRef={passwordRef} id="password" label="New password" name="password" type="password" autoComplete="new-password" aria-invalid={state.field === 'password'} aria-describedby={state.error ? 'reset-password-error' : undefined} />
@@ -31,6 +29,6 @@ export default function ResetPasswordPage() {
           <AuthFeedback error={state.error} errorId="reset-password-error" message={state.message} messageId="reset-password-message" />
           <AuthSubmitButton pendingLabel="Updating password..." label="Update password" />
         </form>
-    </AuthShell>
+    </PasswordRecoveryShell>
   );
 }

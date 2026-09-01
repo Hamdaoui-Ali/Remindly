@@ -59,6 +59,30 @@ export interface ReclaimExpiredProcessing extends NotificationStatusTransition {
   lastError?: string | null;
 }
 
+type NotificationTransitionDataInput = Pick<
+  NotificationTransition,
+  'status' | 'providerMessageId' | 'sentAt' | 'nextAttemptAt' | 'processingStartedAt' | 'lastError'
+> & {
+  incrementAttemptCount: boolean;
+};
+
+export function buildNotificationTransitionData(
+  input: NotificationTransitionDataInput,
+): Prisma.NotificationUpdateManyMutationInput {
+  const data: Prisma.NotificationUpdateManyMutationInput = {
+    status: input.status,
+    processingStartedAt: input.processingStartedAt,
+    providerMessageId: input.providerMessageId,
+    sentAt: input.sentAt,
+    nextAttemptAt: input.nextAttemptAt,
+    lastError: input.lastError,
+  };
+  if (input.incrementAttemptCount) {
+    data.attemptCount = { increment: 1 };
+  }
+  return data;
+}
+
 export interface AtomicDueClaim {
   now: Date;
   leaseExpiredBefore: Date;
@@ -375,17 +399,7 @@ export class NotificationRepository {
   }
 
   async claimPending(input: ClaimPendingNotification): Promise<Notification | null> {
-    const data: Prisma.NotificationUpdateManyMutationInput = {
-      status: input.status,
-      processingStartedAt: input.processingStartedAt,
-      providerMessageId: input.providerMessageId,
-      sentAt: input.sentAt,
-      nextAttemptAt: input.nextAttemptAt,
-      lastError: input.lastError,
-    };
-    if (input.incrementAttemptCount) {
-      data.attemptCount = { increment: 1 };
-    }
+    const data = buildNotificationTransitionData(input);
 
     const result = await this.db.notification.updateMany({
       where: {
@@ -409,15 +423,7 @@ export class NotificationRepository {
   }
 
   async reclaimExpiredProcessing(input: ReclaimExpiredProcessing): Promise<number> {
-    const data: Prisma.NotificationUpdateManyMutationInput = {
-      status: input.status,
-      processingStartedAt: input.processingStartedAt,
-      nextAttemptAt: input.nextAttemptAt,
-      lastError: input.lastError,
-    };
-    if (input.incrementAttemptCount) {
-      data.attemptCount = { increment: 1 };
-    }
+    const data = buildNotificationTransitionData(input);
 
     const result = await this.db.notification.updateMany({
       where: {
