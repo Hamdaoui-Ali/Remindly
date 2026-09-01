@@ -3611,3 +3611,8 @@ read-only. It refuses to apply when active reminders have no owner, schedules
 are invalid, or more than one current notification is found. The strict
 ownership/alert-linkage migration remains gated on a successful dry-run,
 database export, apply, and post-apply reconciliation.
+
+The read-only cutover check is available as `npm run reminders:verify-cutover`.
+It reports aggregate readiness counts for ownership, deadlines, alert linkage,
+schedule versions, current alert notifications, and remaining legacy claimable
+notifications. A non-ready result exits with status 1 and never changes data.
