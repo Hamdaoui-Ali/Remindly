@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 
 import { loginAction, type LoginState } from '@/app/login/actions';
 
@@ -78,6 +79,8 @@ export default function LoginPage() {
 
           <SubmitButton />
         </form>
+        <p><Link href="/forgot-password">Forgot your password?</Link></p>
+        <p><Link href="/register">Need an account? Create one</Link></p>
       </section>
     </main>
   );

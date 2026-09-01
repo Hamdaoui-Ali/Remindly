@@ -15,7 +15,7 @@ it('treats the mobile navigation as a keyboard modal and restores the trigger', 
   expect(within(dialog).getByRole('button', { name: 'Close navigation' })).toHaveFocus();
 
   await user.tab({ shift: true });
-  expect(within(dialog).getByRole('link', { name: 'Settings' })).toHaveFocus();
+  expect(within(dialog).getByRole('button', { name: 'Sign out' })).toHaveFocus();
 
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument();

@@ -193,6 +193,11 @@ button { cursor: pointer; }
 .sidebar__owner span { display: grid; gap: 2px; min-width: 0; }
 .sidebar__owner strong { font-size: 13px; font-weight: 500; }
 .sidebar__owner small { overflow: hidden; color: #cfd7e1; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar__sign-out { display: grid; gap: 6px; margin-top: 16px; }
+.sidebar__sign-out button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 10px 8px; border: 1px solid #40505e; border-radius: 6px; background: transparent; color: var(--sidebar-text); font: inherit; text-align: left; }
+.sidebar__sign-out button:hover:not(:disabled) { background: var(--sidebar-hover); }
+.sidebar__sign-out button:disabled { cursor: wait; opacity: .7; }
+.sidebar__sign-out p { margin: 0; color: #ffb4ad; font-size: 12px; }
 
 .app-shell__content { min-height: 100vh; margin-left: 224px; padding: 32px; }
 .mobile-nav { display: none; }
@@ -314,6 +319,10 @@ button { cursor: pointer; }
 .settings-section__intro h2 { margin: 0; font-size: 20px; line-height: 1.3; }
 .settings-section__intro p { max-width: 360px; margin: 8px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.55; }
 .settings-section__content { min-width: 0; }
+.settings-section--danger { border-top: 2px solid var(--overdue); }
+.settings-section--danger h2 { color: var(--overdue); }
+.danger-confirmation { display: grid; gap: 18px; }
+.danger-confirmation > p { margin: 0; color: var(--text-secondary); }
 .settings-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, .55fr); gap: 24px; }
 .protected-access { display: flex; align-items: flex-start; gap: 12px; min-height: 46px; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-subtle); color: var(--success); }
 .protected-access span { display: grid; gap: 3px; }

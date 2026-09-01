@@ -7,6 +7,7 @@ const PUBLIC_PAGE_ROUTES = new Set([
   '/login',
   '/register',
   '/forgot-password',
+  '/reset-password',
   '/auth/confirm',
 ]);
 
@@ -24,6 +25,10 @@ export async function proxy(request: NextRequest) {
   }
 
   const { response, user } = await updateSupabaseSession(request);
+
+  if (pathname === '/reset-password') {
+    return user ? response : NextResponse.redirect(new URL('/login', request.url));
+  }
 
   if (PUBLIC_PAGE_ROUTES.has(pathname)) {
     return user ? NextResponse.redirect(new URL('/', request.url)) : response;

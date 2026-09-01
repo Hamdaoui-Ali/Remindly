@@ -2,6 +2,10 @@
 
 Remindly is a Supabase-authenticated deadline reminder application. It turns each reminder cycle into durable notification records, scopes data to the authenticated user's profile, shows urgency in that user's timezone, and sends due email through a bounded, retry-safe processor.
 
+SonarCloud analysis is scoped to hand-written `src` code. Generated Prisma
+clients and migration scripts are excluded from quality metrics because they
+are generated artifacts rather than maintainable application code.
+
 ## Requirements
 
 - Node.js `^20.19`, `^22.12`, or `>=24.0.0` (the Prisma 7 requirement; Next.js alone supports `>=20.9.0`)

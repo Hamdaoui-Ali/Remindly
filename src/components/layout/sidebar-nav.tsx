@@ -1,5 +1,6 @@
 import { Bell, Grid2X2, Settings, UserRound } from 'lucide-react';
 import Link from 'next/link';
+import { SignOutButton } from './sign-out-button';
 
 const items = [
   { href: '/', icon: Grid2X2, label: 'Dashboard' },
@@ -23,6 +24,7 @@ export function SidebarNav({ activePath, ownerEmail }: { activePath: string; own
         <UserRound aria-hidden="true" size={26} strokeWidth={1.75} />
         <span><strong>Private workspace</strong><small>{ownerEmail}</small></span>
       </div>
+      <SignOutButton />
     </aside>
   );
 }
