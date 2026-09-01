@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildNotificationTransitionData,
   NotificationRepository,
   type NotificationDatabase,
 } from '@/server/notifications/repository';
@@ -49,6 +50,24 @@ function fakeDatabase(states: NotificationState[]): NotificationDatabase {
 }
 
 describe('NotificationRepository processing leases', () => {
+  it('builds a shared transition payload with an optional attempt increment', () => {
+    expect(buildNotificationTransitionData({
+      status: 'PROCESSING',
+      processingStartedAt: new Date('2026-08-19T11:00:00.000Z'),
+      providerMessageId: undefined,
+      sentAt: undefined,
+      nextAttemptAt: null,
+      lastError: null,
+      incrementAttemptCount: true,
+    })).toMatchObject({
+      status: 'PROCESSING',
+      processingStartedAt: new Date('2026-08-19T11:00:00.000Z'),
+      nextAttemptAt: null,
+      lastError: null,
+      attemptCount: { increment: 1 },
+    });
+  });
+
   it('rejects a stale completion and leaves the newer claimant authoritative', async () => {
     const staleLease = new Date('2026-08-19T11:00:00.000Z');
     const currentLease = new Date('2026-08-19T12:00:00.000Z');
