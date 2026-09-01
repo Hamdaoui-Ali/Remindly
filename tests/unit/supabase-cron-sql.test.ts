@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const sqlPath = path.resolve(process.cwd(), 'infra/supabase/002-cron-notification-processor.sql');
+const workflowPath = path.resolve(process.cwd(), '.github/workflows/process-due-notifications.yml');
 
 describe('Supabase Cron processor contract', () => {
   it('schedules the protected processor every minute through Vault', async () => {
@@ -16,5 +17,12 @@ describe('Supabase Cron processor contract', () => {
     expect(sql).toContain('/api/internal/process-due-notifications');
     expect(sql).not.toMatch(/https?:\/\/[^\s'`$]+/);
     expect(sql).not.toMatch(/x-scheduler-secret\s*[:=]\s*['\"][^'\"]+['\"]/);
+  });
+
+  it('keeps the GitHub workflow as a manual fallback', async () => {
+    const workflow = await readFile(workflowPath, 'utf8');
+
+    expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).not.toContain('schedule:');
   });
 });
