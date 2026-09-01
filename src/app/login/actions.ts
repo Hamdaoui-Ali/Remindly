@@ -37,9 +37,9 @@ export async function loginAction(
 
   try {
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
+    if (error || !data.user?.email_confirmed_at) {
       return {
         error: GENERIC_LOGIN_ERROR,
         field: 'email',
