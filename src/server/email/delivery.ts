@@ -24,6 +24,15 @@ export interface EmailDeliveryDependencies {
   };
 }
 
+export interface EmailDelivery {
+  send(
+    purpose: 'REMINDER' | 'AUTH',
+    message: SendEmailInput,
+    now?: Date,
+    reservationId?: string,
+  ): Promise<EmailDeliveryResult>;
+}
+
 function sanitizedCode(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
     return error.code;
@@ -37,9 +46,12 @@ export function createEmailDelivery(dependencies: EmailDeliveryDependencies) {
       purpose: 'REMINDER' | 'AUTH',
       message: SendEmailInput,
       now = new Date(),
+      reservationId?: string,
     ): Promise<EmailDeliveryResult> {
       if (await dependencies.circuit.isOpen()) return { status: 'blocked', reason: 'circuit_open' };
-      const reservation = await dependencies.reserve(purpose, now);
+      const reservation = reservationId
+        ? { id: reservationId }
+        : await dependencies.reserve(purpose, now);
       if (!reservation) return { status: 'blocked', reason: 'budget_exhausted' };
 
       try {
