@@ -2,12 +2,10 @@
 
 import { LogOut } from 'lucide-react';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
-export function SignOutButton() {
-  const router = useRouter();
+export function SignOutButton({ onSignedOut = () => window.location.assign('/login') }: { onSignedOut?: () => void }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +15,7 @@ export function SignOutButton() {
     try {
       const { error: signOutError } = await createBrowserSupabaseClient().auth.signOut();
       if (signOutError) throw signOutError;
-      router.push('/login');
+      onSignedOut();
     } catch {
       setError('Unable to sign out. Please try again.');
       setPending(false);

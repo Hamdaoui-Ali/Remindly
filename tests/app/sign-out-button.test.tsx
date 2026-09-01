@@ -22,7 +22,7 @@ beforeEach(() => {
 describe('SignOutButton', () => {
   it('signs out and returns to login', async () => {
     signOut.mockResolvedValue({ error: null });
-    render(<SignOutButton />);
+    render(<SignOutButton onSignedOut={() => push('/login')} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
 
