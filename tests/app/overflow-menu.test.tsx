@@ -17,3 +17,15 @@ it('opens an ordinary popover, moves focus into it, and restores the trigger on 
   expect(screen.queryByRole('dialog', { name: 'Reminder actions' })).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
 });
+
+it('closes and restores focus after selecting an action', async () => {
+  const user = userEvent.setup();
+  render(<OverflowMenu><button>Mark done</button></OverflowMenu>);
+  const trigger = screen.getByRole('button', { name: 'Reminder actions' });
+
+  await user.click(trigger);
+  await user.click(screen.getByRole('button', { name: 'Mark done' }));
+
+  expect(screen.queryByRole('dialog', { name: 'Reminder actions' })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});

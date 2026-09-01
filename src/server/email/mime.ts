@@ -1,4 +1,5 @@
 import { GmailDeliveryError } from './errors';
+import { isValidEmail } from '@/lib/validation/auth';
 
 export interface MimeInput {
   from: string;
@@ -15,7 +16,7 @@ function assertSafeHeader(value: string, label: string): void {
 }
 
 function assertEmail(value: string): void {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+  if (!isValidEmail(value)) {
     throw new GmailDeliveryError('permanent', 'gmail_invalid_message', 'definite_failure');
   }
 }
@@ -53,4 +54,3 @@ export function buildMimeMessage(input: MimeInput): string {
 
   return Buffer.from(message, 'utf8').toString('base64url');
 }
-

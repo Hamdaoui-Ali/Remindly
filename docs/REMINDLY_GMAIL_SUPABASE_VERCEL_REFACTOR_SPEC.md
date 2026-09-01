@@ -3602,7 +3602,7 @@ The next migration slice now includes a dry-run-by-default backfill plan at
 `npm run reminders:backfill`. It converts each owned legacy reminder's
 `endDate` + `alertTime` into a timezone-aware `dueAt`, preserves its existing
 legacy `alertAt` instant as a version-one `ReminderAlert`, and links the
-current notification row or creates one when it is missing. Existing
+current notification row or creates a version-one pending notification when it is missing. Existing
 notification status, including `SENT`, is not changed by the linking action.
 
 The command prints only aggregate counts and sanitized issue codes. It applies
@@ -3611,3 +3611,8 @@ read-only. It refuses to apply when active reminders have no owner, schedules
 are invalid, or more than one current notification is found. The strict
 ownership/alert-linkage migration remains gated on a successful dry-run,
 database export, apply, and post-apply reconciliation.
+
+The read-only cutover check is available as `npm run reminders:verify-cutover`.
+It reports aggregate readiness counts for ownership, deadlines, alert linkage,
+schedule versions, current alert notifications, and remaining legacy claimable
+notifications. A non-ready result exits with status 1 and never changes data.
