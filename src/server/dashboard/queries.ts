@@ -148,7 +148,7 @@ export async function getDashboardData(
       SELECT COUNT(*)::bigint AS sent_count
       FROM notifications
       INNER JOIN reminders AS reminder ON reminder.id = notifications.reminder_id
-      WHERE status = 'SENT'
+      WHERE notifications.status = 'SENT'
         ${joinedReminderFilter}
         AND sent_at >= (${monthStart}::timestamp AT TIME ZONE ${timezone})
         AND sent_at < (${nextMonthStart}::timestamp AT TIME ZONE ${timezone})
