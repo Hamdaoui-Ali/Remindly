@@ -221,17 +221,17 @@ export type EmailSendAttemptOrderByWithRelationInput = {
 
 export type EmailSendAttemptWhereUniqueInput = Prisma.AtLeast<{
   id?: string
-  notificationId?: string
   AND?: Prisma.EmailSendAttemptWhereInput | Prisma.EmailSendAttemptWhereInput[]
   OR?: Prisma.EmailSendAttemptWhereInput[]
   NOT?: Prisma.EmailSendAttemptWhereInput | Prisma.EmailSendAttemptWhereInput[]
+  notificationId?: Prisma.UuidNullableFilter<"EmailSendAttempt"> | string | null
   purpose?: Prisma.EnumEmailPurposeFilter<"EmailSendAttempt"> | $Enums.EmailPurpose
   outcome?: Prisma.EnumEmailAttemptOutcomeFilter<"EmailSendAttempt"> | $Enums.EmailAttemptOutcome
   sanitizedCode?: Prisma.StringNullableFilter<"EmailSendAttempt"> | string | null
   providerMessageId?: Prisma.StringNullableFilter<"EmailSendAttempt"> | string | null
   attemptedAt?: Prisma.DateTimeFilter<"EmailSendAttempt"> | Date | string
   completedAt?: Prisma.DateTimeNullableFilter<"EmailSendAttempt"> | Date | string | null
-}, "id" | "notificationId">
+}, "id">
 
 export type EmailSendAttemptOrderByWithAggregationInput = {
   id?: Prisma.SortOrder

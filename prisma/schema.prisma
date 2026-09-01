@@ -151,7 +151,7 @@ model EmailSendAttempt {
   completedAt       DateTime?           @map("completed_at") @db.Timestamptz(6)
 
   @@index([attemptedAt, purpose, outcome])
-  @@unique([notificationId])
+  @@index([notificationId, attemptedAt])
   @@map("email_send_attempts")
 }
 
