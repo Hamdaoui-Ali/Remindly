@@ -26,6 +26,16 @@ describe('Next.js Proxy authentication boundary', () => {
     expect(updateSupabaseSession).toHaveBeenCalledOnce();
   });
 
+  it('allows an authenticated recovery session to reach the reset page', async () => {
+    const refreshedResponse = NextResponse.next();
+    updateSupabaseSession.mockResolvedValue({
+      response: refreshedResponse,
+      user: { id: 'user-123', email: 'user@example.com' },
+    });
+
+    await expect(proxy(request('/reset-password'))).resolves.toBe(refreshedResponse);
+  });
+
   it('redirects an authenticated user away from the login page', async () => {
     updateSupabaseSession.mockResolvedValue({
       response: NextResponse.next(),
