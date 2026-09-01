@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Webhook } from 'standardwebhooks';
 
-const send = vi.fn(async () => ({ status: 'sent' as const }));
+const send = vi.fn(async (..._args: unknown[]) => ({ status: 'sent' as const }));
 vi.mock('@/server/email/configured-delivery', () => ({
   createConfiguredEmailDelivery: () => ({ send }),
 }));
@@ -71,5 +71,28 @@ describe('POST /api/internal/auth/send-email', () => {
 
     expect(response.status).toBe(400);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('aborts a hanging delivery before the Auth Hook deadline', async () => {
+    process.env.SUPABASE_SEND_EMAIL_HOOK_SECRET = configuredSecret;
+    process.env.GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS = '20';
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    send.mockImplementationOnce(async (_purpose, message) => new Promise((_, reject) => {
+      const signal = (message as { signal?: AbortSignal }).signal;
+      signal?.addEventListener('abort', () => reject(new Error('abort signal observed')), { once: true });
+    }));
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        http_code: 503,
+        message: 'Authentication email delivery is temporarily unavailable',
+      },
+    });
+    const message = send.mock.calls[0]?.[1] as { signal?: AbortSignal } | undefined;
+    expect(message?.signal?.aborted).toBe(true);
+    expect(error).toHaveBeenCalledWith('auth-email-hook failed', expect.objectContaining({ code: 'timeout' }));
   });
 });
