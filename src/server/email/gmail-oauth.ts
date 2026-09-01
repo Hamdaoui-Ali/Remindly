@@ -17,7 +17,7 @@ export class GmailOAuthClient {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async getAccessToken(): Promise<string> {
+  async getAccessToken(signal?: AbortSignal): Promise<string> {
     if (this.accessToken && this.expiresAt - Date.now() > 60_000) return this.accessToken;
 
     let response: Response;
@@ -31,7 +31,9 @@ export class GmailOAuthClient {
           refresh_token: this.options.refreshToken,
           grant_type: 'refresh_token',
         }),
-        signal: AbortSignal.timeout(this.options.requestTimeoutMs ?? 8_000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(this.options.requestTimeoutMs ?? 8_000)])
+          : AbortSignal.timeout(this.options.requestTimeoutMs ?? 8_000),
       });
     } catch {
       throw new GmailDeliveryError('provider_unavailable', 'gmail_oauth_transport', 'unknown_outcome');
@@ -50,4 +52,3 @@ export class GmailOAuthClient {
     return body.access_token;
   }
 }
-

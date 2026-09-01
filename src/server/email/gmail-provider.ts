@@ -26,7 +26,7 @@ export class GmailEmailProvider implements EmailProvider {
     const raw = buildMimeMessage({ ...input, from: this.options.from });
     let accessToken: string;
     try {
-      accessToken = await this.options.oauth.getAccessToken();
+      accessToken = await this.options.oauth.getAccessToken(input.signal);
     } catch (error) {
       if (error instanceof EmailDeliveryError) throw error;
       throw gmailTransportError();
@@ -41,7 +41,9 @@ export class GmailEmailProvider implements EmailProvider {
           'content-type': 'application/json',
         },
         body: JSON.stringify({ raw }),
-        signal: AbortSignal.timeout(this.options.requestTimeoutMs ?? 10_000),
+        signal: input.signal
+          ? AbortSignal.any([input.signal, AbortSignal.timeout(this.options.requestTimeoutMs ?? 10_000)])
+          : AbortSignal.timeout(this.options.requestTimeoutMs ?? 10_000),
       });
     } catch {
       throw gmailTransportError();

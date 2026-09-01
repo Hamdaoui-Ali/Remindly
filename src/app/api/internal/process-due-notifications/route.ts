@@ -1,9 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { serverEnv } from '@/lib/env';
-import { GmailEmailProvider } from '@/server/email/gmail-provider';
-import { GmailOAuthClient } from '@/server/email/gmail-oauth';
-import { ResendEmailProvider } from '@/server/email/resend-provider';
+import { createEmailProvider } from '@/server/email/provider-factory';
 import { processDueNotifications } from '@/server/notifications/processor';
 import { completeProcessorRun, startProcessorRun } from '@/server/notifications/processor-run';
 import { prisma } from '@/server/db/client';
@@ -57,20 +55,17 @@ export async function POST(request: Request) {
   try {
     const run = await startProcessorRun(prisma, new Date());
     processorRunId = run.id;
-    const provider = env.EMAIL_PROVIDER === 'gmail'
-      ? new GmailEmailProvider({
-        from: `${env.GMAIL_SENDER_NAME} <${env.GMAIL_SENDER_EMAIL}>`,
-        oauth: new GmailOAuthClient({
-          clientId: env.GMAIL_CLIENT_ID!,
-          clientSecret: env.GMAIL_CLIENT_SECRET!,
-          refreshToken: env.GMAIL_REFRESH_TOKEN!,
-        }),
-        requestTimeoutMs: env.GMAIL_REQUEST_TIMEOUT_MS,
-      })
-      : new ResendEmailProvider({
-        apiKey: env.RESEND_API_KEY,
-        from: env.RESEND_FROM,
-      });
+    const provider = createEmailProvider({
+      emailProvider: env.EMAIL_PROVIDER,
+      gmailClientId: env.GMAIL_CLIENT_ID,
+      gmailClientSecret: env.GMAIL_CLIENT_SECRET,
+      gmailRefreshToken: env.GMAIL_REFRESH_TOKEN,
+      gmailSenderEmail: env.GMAIL_SENDER_EMAIL,
+      gmailSenderName: env.GMAIL_SENDER_NAME,
+      gmailRequestTimeoutMs: env.GMAIL_REQUEST_TIMEOUT_MS,
+      resendApiKey: env.RESEND_API_KEY,
+      resendFrom: env.RESEND_FROM,
+    });
     const counts = await processDueNotifications({
       now: new Date(),
       limit: PROCESSOR_BATCH_LIMIT,

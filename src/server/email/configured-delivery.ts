@@ -4,24 +4,22 @@ import { reserveEmailSend, finalizeEmailSend } from '@/server/notifications/budg
 import { DEFAULT_REMINDER_CLAIM_CEILING } from '@/server/notifications/budget';
 import { advanceCircuitBreaker } from '@/server/notifications/circuit-breaker';
 import { closeGmailCircuit, readGmailCircuitState, recordGmailCircuitFailure } from './circuit-state';
-import { GmailEmailProvider } from './gmail-provider';
-import { GmailOAuthClient } from './gmail-oauth';
-import { ResendEmailProvider } from './resend-provider';
+import { createEmailProvider } from './provider-factory';
 import { createEmailDelivery, type EmailDeliveryDependencies } from './delivery';
 
 export function createConfiguredEmailDelivery() {
   const env = serverEnv();
-  const provider = env.EMAIL_PROVIDER === 'gmail'
-    ? new GmailEmailProvider({
-      from: `${env.GMAIL_SENDER_NAME} <${env.GMAIL_SENDER_EMAIL}>`,
-      oauth: new GmailOAuthClient({
-        clientId: env.GMAIL_CLIENT_ID!,
-        clientSecret: env.GMAIL_CLIENT_SECRET!,
-        refreshToken: env.GMAIL_REFRESH_TOKEN!,
-      }),
-      requestTimeoutMs: env.GMAIL_REQUEST_TIMEOUT_MS,
-    })
-    : new ResendEmailProvider({ apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM });
+  const provider = createEmailProvider({
+    emailProvider: env.EMAIL_PROVIDER,
+    gmailClientId: env.GMAIL_CLIENT_ID,
+    gmailClientSecret: env.GMAIL_CLIENT_SECRET,
+    gmailRefreshToken: env.GMAIL_REFRESH_TOKEN,
+    gmailSenderEmail: env.GMAIL_SENDER_EMAIL,
+    gmailSenderName: env.GMAIL_SENDER_NAME,
+    gmailRequestTimeoutMs: env.GMAIL_REQUEST_TIMEOUT_MS,
+    resendApiKey: env.RESEND_API_KEY,
+    resendFrom: env.RESEND_FROM,
+  });
   const policy = {
     total: env.GMAIL_TOTAL_DAILY_BUDGET,
     authReserve: env.GMAIL_AUTH_RESERVE,

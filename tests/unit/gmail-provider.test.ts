@@ -74,6 +74,21 @@ describe('GmailEmailProvider', () => {
     expect(JSON.parse(await sendRequest.text())).toEqual(expect.objectContaining({ raw: expect.any(String) }));
   });
 
+  it('propagates an already-aborted delivery signal to OAuth and Gmail requests', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const oauth = { getAccessToken: vi.fn(async (signal?: AbortSignal) => {
+      expect(signal?.aborted).toBe(true);
+      throw new GmailDeliveryError('provider_unavailable', 'gmail_oauth_transport', 'unknown_outcome');
+    }) } as unknown as GmailOAuthClient;
+    const provider = new GmailEmailProvider({ oauth, from: 'Remindly <remindly@example.com>' });
+
+    await expect(provider.send({ ...email, signal: controller.signal })).rejects.toMatchObject({
+      code: 'gmail_oauth_transport',
+      outcome: 'unknown_outcome',
+    });
+  });
+
   it.each([
     [400, 'permanent', 'gmail_invalid_message'],
     [401, 'auth_revoked', 'gmail_auth_revoked'],

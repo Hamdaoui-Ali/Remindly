@@ -31,12 +31,16 @@ vi.mock('@/server/email/resend-provider', () => ({
     }
   },
 }));
+vi.mock('@/server/email/provider-factory', () => ({
+  createEmailProvider: (options: unknown) => resendProvider(options),
+}));
 vi.mock('@/lib/env', () => ({ serverEnv }));
 
 import { GET as getHealth } from '@/app/api/health/route';
 import { POST as processNotifications } from '@/app/api/internal/process-due-notifications/route';
 
 const environment = {
+  EMAIL_PROVIDER: 'resend' as const,
   RESEND_API_KEY: 're_test',
   RESEND_FROM: 'Remindly <notifications@example.com>',
   SCHEDULER_SECRET: 'scheduler-secret-123456',
@@ -156,8 +160,15 @@ describe('POST /api/internal/process-due-notifications', () => {
     ));
 
     expect(resendProvider).toHaveBeenCalledWith({
-      apiKey: environment.RESEND_API_KEY,
-      from: environment.RESEND_FROM,
+      emailProvider: 'resend',
+      gmailClientId: undefined,
+      gmailClientSecret: undefined,
+      gmailRefreshToken: undefined,
+      gmailSenderEmail: undefined,
+      gmailSenderName: undefined,
+      gmailRequestTimeoutMs: undefined,
+      resendApiKey: environment.RESEND_API_KEY,
+      resendFrom: environment.RESEND_FROM,
     });
     expect(processDueNotifications).toHaveBeenCalledWith({
       now: expect.any(Date),

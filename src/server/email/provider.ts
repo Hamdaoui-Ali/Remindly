@@ -4,6 +4,7 @@ export interface SendEmailInput {
   html: string;
   text: string;
   idempotencyKey: string;
+  signal?: AbortSignal;
 }
 
 export interface SendEmailResult {
