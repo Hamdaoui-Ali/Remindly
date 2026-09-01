@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { EmailProvider, SendEmailInput } from '@/server/email/provider';
+import type { EmailDelivery, EmailDeliveryResult } from '@/server/email/delivery';
+import type { SendEmailInput } from '@/server/email/provider';
 import { prisma } from '@/server/db/client';
 import {
   processDueNotifications,
@@ -16,16 +17,16 @@ let originalSettings: {
   defaultAlertTime: string;
 } | null = null;
 
-class RecordingEmailProvider implements EmailProvider {
+class RecordingEmailDelivery implements EmailDelivery {
   readonly calls: SendEmailInput[] = [];
   readonly accepted = new Map<string, string>();
   readonly failAlways = new Set<string>();
   readonly ambiguousOnce = new Set<string>();
 
-  async send(input: SendEmailInput): Promise<{ providerMessageId?: string }> {
+  async send(_purpose: 'REMINDER' | 'AUTH', input: SendEmailInput): Promise<EmailDeliveryResult> {
     this.calls.push(input);
     const existing = this.accepted.get(input.idempotencyKey);
-    if (existing) return { providerMessageId: existing };
+    if (existing) return { status: 'sent', providerMessageId: existing };
     if (this.failAlways.has(input.idempotencyKey)) {
       throw Object.assign(new Error('Provider rejected secret token re_sensitive_should_not_be_stored'), {
         outcome: 'definite_failure',
@@ -39,7 +40,7 @@ class RecordingEmailProvider implements EmailProvider {
         outcome: 'unknown_outcome',
       });
     }
-    return { providerMessageId };
+    return { status: 'sent', providerMessageId };
   }
 }
 
@@ -212,6 +213,23 @@ async function waitForReconciliationLock() {
 }
 
 describe('processDueNotifications', () => {
+  it('does not claim reminder notifications when the reminder budget is exhausted', async () => {
+    const { notification } = await createDueNotification();
+    const delivery = new RecordingEmailDelivery();
+
+    const result = await processDueNotifications({
+      now: NOW,
+      limit: 20,
+      delivery,
+      budgetPolicy: { total: 0, authReserve: 0, reminderCeiling: 0 },
+    });
+
+    expect(result).toEqual({ claimed: 0, sent: 0, failed: 0, recovered: 0 });
+    expect(delivery.calls).toHaveLength(0);
+    expect(await prisma.notification.findUnique({ where: { id: notification.id } }))
+      .toMatchObject({ status: 'PENDING', attemptCount: 0 });
+  });
+
   it('sends each due alert to the verified profile and leaves future alerts pending', async () => {
     const firstAlertAt = new Date('2026-08-19T11:00:00.000Z');
     const secondAlertAt = new Date('2026-08-19T11:30:00.000Z');
@@ -220,9 +238,9 @@ describe('processDueNotifications', () => {
       alertTimes: [firstAlertAt, secondAlertAt, futureAlertAt],
       dueAlertIndexes: [0, 1],
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toMatchObject({ claimed: 2, sent: 2, failed: 0 });
     expect(provider.calls).toHaveLength(2);
@@ -248,9 +266,9 @@ describe('processDueNotifications', () => {
       alertTimes: [new Date('2026-08-19T11:00:00.000Z')],
       ...options,
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result.sent).toBe(0);
     expect(provider.calls).toHaveLength(0);
@@ -260,9 +278,9 @@ describe('processDueNotifications', () => {
 
   it('reconciles a missing current ledger row and sends it in the same processor run', async () => {
     const reminder = await createReminder();
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
     const notifications = await prisma.notification.findMany({ where: { reminderId: reminder.id } });
 
     expect(result).toEqual({ claimed: 1, sent: 1, failed: 0, recovered: 0 });
@@ -278,10 +296,10 @@ describe('processDueNotifications', () => {
 
   it('claims a due row once when two processors run concurrently', async () => {
     const { notification } = await createDueNotification();
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
     const [first, second] = await Promise.all([
-      processDueNotifications({ now: NOW, limit: 20, provider }),
-      processDueNotifications({ now: NOW, limit: 20, provider }),
+      processDueNotifications({ now: NOW, limit: 20, delivery: provider }),
+      processDueNotifications({ now: NOW, limit: 20, delivery: provider }),
     ]);
 
     expect(first.sent + second.sent).toBe(1);
@@ -297,9 +315,9 @@ describe('processDueNotifications', () => {
       attemptCount: 1,
       processingStartedAt: new Date('2026-08-19T11:44:59.999Z'),
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toEqual({ claimed: 1, sent: 1, failed: 0, recovered: 1 });
     expect(provider.calls[0]?.idempotencyKey).toBe(notification.id);
@@ -313,9 +331,9 @@ describe('processDueNotifications', () => {
       attemptCount: 1,
       processingStartedAt: new Date('2026-08-19T11:45:00.000Z'),
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toEqual({ claimed: 0, sent: 0, failed: 0, recovered: 0 });
     expect(provider.calls).toHaveLength(0);
@@ -329,9 +347,9 @@ describe('processDueNotifications', () => {
       attemptCount: 5,
       processingStartedAt: new Date('2026-08-19T11:44:59.999Z'),
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toEqual({ claimed: 0, sent: 0, failed: 1, recovered: 1 });
     expect(provider.calls).toHaveLength(0);
@@ -348,9 +366,9 @@ describe('processDueNotifications', () => {
   it('re-checks reminder state and cancels a claimed row before calling the provider', async () => {
     const { reminder, notification } = await createDueNotification();
     await prisma.reminder.update({ where: { id: reminder.id }, data: { status: 'DONE', completedAt: NOW } });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toEqual({ claimed: 1, sent: 0, failed: 0, recovered: 0 });
     expect(provider.calls).toHaveLength(0);
@@ -364,9 +382,9 @@ describe('processDueNotifications', () => {
       where: { id: reminder.id },
       data: { alertAt: new Date('2026-08-20T11:00:00.000Z') },
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toEqual({ claimed: 1, sent: 0, failed: 0, recovered: 0 });
     expect(provider.calls).toHaveLength(0);
@@ -377,10 +395,10 @@ describe('processDueNotifications', () => {
   it('isolates failed rows, stores a sanitized error, and sends the rest of the batch', async () => {
     const failing = await createDueNotification({ name: `Failing ${crypto.randomUUID()}` });
     const passing = await createDueNotification({ name: `Passing ${crypto.randomUUID()}` });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
     provider.failAlways.add(failing.notification.id);
 
-    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+    const result = await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(result).toEqual({ claimed: 2, sent: 1, failed: 1, recovered: 0 });
     expect(await prisma.notification.findUnique({ where: { id: failing.notification.id } }))
@@ -396,10 +414,10 @@ describe('processDueNotifications', () => {
 
   it('reuses the notification UUID so an ambiguous retry is accepted once logically', async () => {
     const { notification } = await createDueNotification();
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
     provider.ambiguousOnce.add(notification.id);
 
-    await processDueNotifications({ now: NOW, limit: 20, provider });
+    await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
     expect(await prisma.notification.findUnique({ where: { id: notification.id } }))
       .toMatchObject({
         status: 'FAILED',
@@ -408,7 +426,7 @@ describe('processDueNotifications', () => {
     const retried = await processDueNotifications({
       now: new Date('2026-08-19T12:05:00.000Z'),
       limit: 20,
-      provider,
+      delivery: provider,
     });
 
     expect(retried.sent).toBe(1);
@@ -424,11 +442,11 @@ describe('processDueNotifications', () => {
       attemptCount: 4,
       nextAttemptAt: NOW,
     });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
     provider.failAlways.add(notification.id);
 
-    await processDueNotifications({ now: NOW, limit: 20, provider });
-    await processDueNotifications({ now: new Date('2026-08-21T12:00:00.000Z'), limit: 20, provider });
+    await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
+    await processDueNotifications({ now: new Date('2026-08-21T12:00:00.000Z'), limit: 20, delivery: provider });
 
     expect(provider.calls).toHaveLength(1);
     expect(await prisma.notification.findUnique({ where: { id: notification.id } }))
@@ -438,9 +456,9 @@ describe('processDueNotifications', () => {
   it('builds email copy with the reminder, date, urgency, schedule, and authenticated link', async () => {
     const name = 'Passport <renewal>';
     const { reminder } = await createDueNotification({ name });
-    const provider = new RecordingEmailProvider();
+    const provider = new RecordingEmailDelivery();
 
-    await processDueNotifications({ now: NOW, limit: 20, provider });
+    await processDueNotifications({ now: NOW, limit: 20, delivery: provider });
 
     expect(provider.calls).toHaveLength(1);
     expect(provider.calls[0]).toMatchObject({
