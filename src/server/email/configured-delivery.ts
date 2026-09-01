@@ -2,13 +2,12 @@ import { serverEnv } from '@/lib/env';
 import { prisma } from '@/server/db/client';
 import { reserveEmailSend, finalizeEmailSend } from '@/server/notifications/budget-repository';
 import { DEFAULT_REMINDER_CLAIM_CEILING } from '@/server/notifications/budget';
-import { advanceCircuitBreaker, initialCircuitBreakerState, recordCircuitFailure } from '@/server/notifications/circuit-breaker';
+import { advanceCircuitBreaker } from '@/server/notifications/circuit-breaker';
+import { closeGmailCircuit, readGmailCircuitState, recordGmailCircuitFailure } from './circuit-state';
 import { GmailEmailProvider } from './gmail-provider';
 import { GmailOAuthClient } from './gmail-oauth';
 import { ResendEmailProvider } from './resend-provider';
 import { createEmailDelivery, type EmailDeliveryDependencies } from './delivery';
-
-let circuitState = initialCircuitBreakerState();
 
 export function createConfiguredEmailDelivery() {
   const env = serverEnv();
@@ -33,9 +32,18 @@ export function createConfiguredEmailDelivery() {
     reserve: (purpose, now) => prisma.$transaction((tx) => reserveEmailSend(tx, policy, purpose, now)),
     finalize: (id, outcome, now, details) => finalizeEmailSend(prisma.emailSendAttempt, id, outcome, now, details),
     circuit: {
-      isOpen: () => !advanceCircuitBreaker(circuitState, new Date(), { failureThreshold: 3, openForMilliseconds: 60_000 }).allowed,
-      success: () => { circuitState = initialCircuitBreakerState(); },
-      failure: (code) => { circuitState = recordCircuitFailure(circuitState, code, new Date(), { failureThreshold: 3, openForMilliseconds: 60_000 }); },
+      isOpen: async () => {
+        const current = await readGmailCircuitState(prisma);
+        const state = {
+          state: current.state.toLowerCase() as 'closed' | 'open' | 'half_open',
+          failureCount: current.failureCount,
+          openedAt: current.openedAt,
+          lastFailureCode: current.lastFailureCode,
+        };
+        return !advanceCircuitBreaker(state, new Date(), { failureThreshold: 3, openForMilliseconds: 60_000 }).allowed;
+      },
+      success: async () => { await closeGmailCircuit(prisma); },
+      failure: async (code) => { await recordGmailCircuitFailure(prisma, code, new Date(), { failureThreshold: 3 }); },
     },
   };
   return createEmailDelivery(dependencies);
