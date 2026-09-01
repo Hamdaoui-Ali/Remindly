@@ -49,4 +49,20 @@ describe('loginAction', () => {
       password: 'password',
     });
   });
+
+  it('blocks a user whose email is not confirmed', async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { user: { email_confirmed_at: null } },
+      error: null,
+    });
+    const formData = new FormData();
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'password');
+
+    await expect(loginAction(initialState, formData)).resolves.toMatchObject({
+      error: 'Unable to sign in with those credentials.',
+      field: 'email',
+      attempt: 1,
+    });
+  });
 });
