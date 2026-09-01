@@ -3,6 +3,10 @@ import type { ReminderWithAlerts, ReminderWithNotifications } from './types';
 
 export type ReminderDatabase = PrismaClient | Prisma.TransactionClient;
 
+function isReminderStatus(value: string): value is ReminderStatus {
+  return value === 'ACTIVE' || value === 'DONE' || value === 'ARCHIVED';
+}
+
 export interface CreateReminderRecord {
   name: string;
   dueAt?: Date;
@@ -92,10 +96,11 @@ export class ReminderRepository {
     statusOrCompletedAt?: ReminderStatus | Date | null,
     maybeCompletedAt?: Date | null,
   ): Promise<Reminder> {
-    const userId = typeof idOrStatus === 'string' ? userIdOrId : undefined;
-    const id = typeof idOrStatus === 'string' ? idOrStatus : userIdOrId;
-    const status = (typeof idOrStatus === 'string' ? statusOrCompletedAt : idOrStatus) as ReminderStatus;
-    const completedAt = (typeof idOrStatus === 'string' ? maybeCompletedAt : statusOrCompletedAt) as Date | null | undefined;
+    const legacyCall = isReminderStatus(idOrStatus);
+    const userId = legacyCall ? undefined : userIdOrId;
+    const id = legacyCall ? userIdOrId : idOrStatus;
+    const status = (legacyCall ? idOrStatus : statusOrCompletedAt) as ReminderStatus;
+    const completedAt = (legacyCall ? statusOrCompletedAt : maybeCompletedAt) as Date | null | undefined;
     const result = await this.db.reminder.updateMany({
       where: userId ? { id, userId } : { id },
       data: { status, ...(completedAt === undefined ? {} : { completedAt }) },
