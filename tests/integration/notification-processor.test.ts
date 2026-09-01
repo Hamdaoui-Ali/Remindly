@@ -9,6 +9,7 @@ import { SETTINGS_SINGLETON_ID } from '@/server/settings/repository';
 
 const NOW = new Date('2026-08-19T12:00:00.000Z');
 const fixtureNames: string[] = [];
+const fixtureProfileIds: string[] = [];
 let originalSettings: {
   notificationEmail: string;
   timezone: string;
@@ -68,6 +69,10 @@ afterEach(async () => {
     await prisma.reminder.deleteMany({ where: { name: { in: fixtureNames } } });
     fixtureNames.length = 0;
   }
+  if (fixtureProfileIds.length > 0) {
+    await prisma.userProfile.deleteMany({ where: { id: { in: fixtureProfileIds } } });
+    fixtureProfileIds.length = 0;
+  }
   if (originalSettings) {
     await prisma.settings.update({ where: { id: SETTINGS_SINGLETON_ID }, data: originalSettings });
   } else {
@@ -119,6 +124,61 @@ async function createDueNotification(input: {
   return { reminder, notification };
 }
 
+async function createAlertNotification(input: {
+  alertTimes: Date[];
+  dueAlertIndexes?: number[];
+  profileVerified?: boolean;
+  alertEnabled?: boolean;
+  scheduleVersion?: number;
+  notificationScheduleVersion?: number;
+  notificationScheduledFor?: Date;
+  reminderName?: string;
+}) {
+  const profileId = crypto.randomUUID();
+  fixtureProfileIds.push(profileId);
+  const profile = await prisma.userProfile.create({
+    data: {
+      id: profileId,
+      email: `processor-${profileId}@example.com`,
+      emailVerifiedAt: input.profileVerified === false ? null : NOW,
+      timezone: 'Africa/Casablanca',
+    },
+  });
+  const reminder = await createReminder({
+    name: input.reminderName,
+    alertAt: new Date('2026-08-20T11:00:00.000Z'),
+  });
+  await prisma.reminder.update({ where: { id: reminder.id }, data: { userId: profile.id } });
+  const alerts = await Promise.all(input.alertTimes.map((scheduledFor, index) => prisma.reminderAlert.create({
+    data: {
+      reminderId: reminder.id,
+      scheduledFor,
+      scheduleVersion: input.scheduleVersion ?? 1,
+      enabled: index === 0 ? input.alertEnabled ?? true : true,
+      channel: 'EMAIL',
+    },
+  })));
+  const dueAlertIndexes = input.dueAlertIndexes ?? alerts.map((_, index) => index);
+  const notifications = await Promise.all(dueAlertIndexes.map((index) => {
+    const alert = alerts[index];
+    if (!alert) throw new Error(`Missing alert fixture at index ${index}`);
+    const id = crypto.randomUUID();
+    return prisma.notification.create({
+      data: {
+        id,
+        reminderId: reminder.id,
+        reminderAlertId: alert.id,
+        scheduledFor: input.notificationScheduledFor ?? alert.scheduledFor,
+        scheduleVersion: input.notificationScheduleVersion ?? alert.scheduleVersion,
+        status: 'PENDING',
+        channel: 'EMAIL',
+        idempotencyKey: id,
+      },
+    });
+  }));
+  return { profile, reminder, alerts, notifications };
+}
+
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((next) => { resolve = next; });
@@ -152,6 +212,52 @@ async function waitForReconciliationLock() {
 }
 
 describe('processDueNotifications', () => {
+  it('sends each due alert to the verified profile and leaves future alerts pending', async () => {
+    const firstAlertAt = new Date('2026-08-19T11:00:00.000Z');
+    const secondAlertAt = new Date('2026-08-19T11:30:00.000Z');
+    const futureAlertAt = new Date('2026-08-20T11:00:00.000Z');
+    const { profile, alerts, notifications } = await createAlertNotification({
+      alertTimes: [firstAlertAt, secondAlertAt, futureAlertAt],
+      dueAlertIndexes: [0, 1],
+    });
+    const provider = new RecordingEmailProvider();
+
+    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+
+    expect(result).toMatchObject({ claimed: 2, sent: 2, failed: 0 });
+    expect(provider.calls).toHaveLength(2);
+    expect(provider.calls.every((call) => call.to === profile.email)).toBe(true);
+    expect(await prisma.notification.findMany({
+      where: { id: { in: notifications.map((notification) => notification.id) } },
+      orderBy: { scheduledFor: 'asc' },
+    })).toMatchObject([
+      { reminderAlertId: alerts[0]?.id, status: 'SENT' },
+      { reminderAlertId: alerts[1]?.id, status: 'SENT' },
+    ]);
+  });
+
+  it.each([
+    ['disabled alert', { alertEnabled: false }],
+    ['unverified profile', { profileVerified: false }],
+    ['stale schedule version', { scheduleVersion: 2, notificationScheduleVersion: 1 }],
+    ['mismatched schedule timestamp', {
+      notificationScheduledFor: new Date('2026-08-19T11:01:00.000Z'),
+    }],
+  ])('cancels a %s before sending', async (_label, options) => {
+    const { notifications } = await createAlertNotification({
+      alertTimes: [new Date('2026-08-19T11:00:00.000Z')],
+      ...options,
+    });
+    const provider = new RecordingEmailProvider();
+
+    const result = await processDueNotifications({ now: NOW, limit: 20, provider });
+
+    expect(result.sent).toBe(0);
+    expect(provider.calls).toHaveLength(0);
+    expect(await prisma.notification.findUnique({ where: { id: notifications[0]?.id } }))
+      .toMatchObject({ status: 'CANCELLED', processingStartedAt: null });
+  });
+
   it('reconciles a missing current ledger row and sends it in the same processor run', async () => {
     const reminder = await createReminder();
     const provider = new RecordingEmailProvider();
