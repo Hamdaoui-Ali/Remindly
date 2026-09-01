@@ -1,9 +1,9 @@
 import type { Notification, Reminder, Settings, UserProfile } from '@/generated/prisma/client';
 import {
   emailDeliveryOutcome,
-  type EmailProvider,
   type SendEmailInput,
 } from '@/server/email/provider';
+import type { EmailDelivery } from '@/server/email/delivery';
 import { prisma } from '@/server/db/client';
 import { SettingsRepository } from '@/server/settings/repository';
 import { calculateUrgency } from '@/server/urgency/urgency';
@@ -24,7 +24,7 @@ const PROCESSING_ERROR = 'Notification processing failed';
 export interface ProcessDueNotificationsInput {
   now: Date;
   limit: number;
-  provider: EmailProvider;
+  delivery: EmailDelivery;
   budgetPolicy?: EmailBudgetPolicy;
 }
 
@@ -190,7 +190,20 @@ async function processClaimedNotification(
   }
 
   try {
-    const accepted = await input.provider.send(email);
+    const accepted = await input.delivery.send(
+      'REMINDER',
+      email,
+      input.now,
+      claimed.emailSendAttemptId,
+    );
+    if (accepted.status === 'blocked') {
+      if (claimed.emailSendAttemptId) {
+        await finalizeEmailSend(prisma.emailSendAttempt, claimed.emailSendAttemptId, 'DEFINITE_FAILURE', input.now, {
+          sanitizedCode: `email_delivery_${accepted.reason}`,
+        });
+      }
+      return failClaim(repository, claimed, input.now, 'Email delivery unavailable');
+    }
     const transitioned = await repository.markSent(current.id, {
       status: 'SENT',
       providerMessageId: accepted.providerMessageId ?? null,
@@ -205,7 +218,6 @@ async function processClaimedNotification(
   } catch (error) {
     const outcome = emailDeliveryOutcome(error);
     const lastError = outcome === 'definite_failure' ? DEFINITE_PROVIDER_ERROR : UNKNOWN_PROVIDER_ERROR;
-    if (claimed.emailSendAttemptId) await finalizeEmailSend(prisma.emailSendAttempt, claimed.emailSendAttemptId, outcome === 'definite_failure' ? 'DEFINITE_FAILURE' : 'UNKNOWN_OUTCOME', input.now, { sanitizedCode: outcome === 'definite_failure' ? 'email_provider_definite_failure' : 'email_provider_unknown_outcome' });
     return failClaim(repository, claimed, input.now, lastError);
   }
 }

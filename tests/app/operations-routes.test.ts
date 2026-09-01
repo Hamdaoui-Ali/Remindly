@@ -4,14 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   databaseProbe,
+  configuredDelivery,
   processDueNotifications,
-  resendProvider,
-  serverEnv,
 } = vi.hoisted(() => ({
   databaseProbe: vi.fn(),
+  configuredDelivery: vi.fn(),
   processDueNotifications: vi.fn(),
-  resendProvider: vi.fn(),
-  serverEnv: vi.fn(),
 }));
 
 vi.mock('@/server/db/client', () => ({
@@ -24,17 +22,9 @@ vi.mock('@/server/db/client', () => ({
   },
 }));
 vi.mock('@/server/notifications/processor', () => ({ processDueNotifications }));
-vi.mock('@/server/email/resend-provider', () => ({
-  ResendEmailProvider: class {
-    constructor(options: unknown) {
-      return resendProvider(options);
-    }
-  },
+vi.mock('@/server/email/configured-delivery', () => ({
+  createConfiguredEmailDelivery: configuredDelivery,
 }));
-vi.mock('@/server/email/provider-factory', () => ({
-  createEmailProvider: (options: unknown) => resendProvider(options),
-}));
-vi.mock('@/lib/env', () => ({ serverEnv }));
 
 import { GET as getHealth } from '@/app/api/health/route';
 import { POST as processNotifications } from '@/app/api/internal/process-due-notifications/route';
@@ -51,9 +41,7 @@ beforeEach(() => {
   vi.stubEnv('SCHEDULER_SECRET', environment.SCHEDULER_SECRET);
   databaseProbe.mockReset();
   processDueNotifications.mockReset();
-  resendProvider.mockReset();
-  serverEnv.mockReset();
-  serverEnv.mockReturnValue(environment);
+  configuredDelivery.mockReset();
 });
 
 afterEach(() => {
@@ -99,7 +87,6 @@ describe('POST /api/internal/process-due-notifications', () => {
 
       expect(response.status).toBe(401);
       await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' });
-      expect(serverEnv).not.toHaveBeenCalled();
       expect(processDueNotifications).not.toHaveBeenCalled();
     },
   );
@@ -116,12 +103,11 @@ describe('POST /api/internal/process-due-notifications', () => {
     ));
 
     expect(response.status).toBe(401);
-    expect(serverEnv).not.toHaveBeenCalled();
     expect(processDueNotifications).not.toHaveBeenCalled();
   });
 
   it('sanitizes unrelated configuration failures only after scheduler authentication', async () => {
-    serverEnv.mockImplementationOnce(() => {
+    configuredDelivery.mockImplementationOnce(() => {
       throw new Error('missing database password');
     });
 
@@ -133,7 +119,7 @@ describe('POST /api/internal/process-due-notifications', () => {
       },
     ));
 
-    expect(serverEnv).toHaveBeenCalledOnce();
+    expect(configuredDelivery).toHaveBeenCalledOnce();
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
       error: 'Notification processing failed',
@@ -142,8 +128,8 @@ describe('POST /api/internal/process-due-notifications', () => {
   });
 
   it('uses the configured provider and bounded batch, then returns processor counts', async () => {
-    const provider = { send: vi.fn() };
-    resendProvider.mockReturnValueOnce(provider);
+    const delivery = { send: vi.fn() };
+    configuredDelivery.mockReturnValueOnce(delivery);
     processDueNotifications.mockResolvedValueOnce({
       claimed: 4,
       sent: 3,
@@ -159,21 +145,11 @@ describe('POST /api/internal/process-due-notifications', () => {
       },
     ));
 
-    expect(resendProvider).toHaveBeenCalledWith({
-      emailProvider: 'resend',
-      gmailClientId: undefined,
-      gmailClientSecret: undefined,
-      gmailRefreshToken: undefined,
-      gmailSenderEmail: undefined,
-      gmailSenderName: undefined,
-      gmailRequestTimeoutMs: undefined,
-      resendApiKey: environment.RESEND_API_KEY,
-      resendFrom: environment.RESEND_FROM,
-    });
+    expect(configuredDelivery).toHaveBeenCalledOnce();
     expect(processDueNotifications).toHaveBeenCalledWith({
       now: expect.any(Date),
       limit: 50,
-      provider,
+      delivery,
     });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -185,7 +161,7 @@ describe('POST /api/internal/process-due-notifications', () => {
   });
 
   it('returns a sanitized failure when processing cannot complete', async () => {
-    resendProvider.mockReturnValueOnce({ send: vi.fn() });
+    configuredDelivery.mockReturnValueOnce({ send: vi.fn() });
     processDueNotifications.mockRejectedValueOnce(
       new Error('database password and reminder contents'),
     );
