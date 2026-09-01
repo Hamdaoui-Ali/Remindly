@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useActionState, useRef } from 'react';
 import { forgotPasswordAction, type PasswordRecoveryState } from './actions';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthFeedback } from '@/components/auth/auth-feedback';
-import { AuthShell } from '@/components/auth/auth-shell';
+import { PasswordRecoveryShell } from '@/components/auth/password-recovery-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
 import { useAuthFieldFocus } from '@/components/auth/use-auth-field-focus';
 
@@ -18,17 +17,16 @@ export default function ForgotPasswordPage() {
   useAuthFieldFocus(state.field, state.attempt, { email: emailRef });
 
   return (
-    <AuthShell
+    <PasswordRecoveryShell
       title="Reset your password"
       description="We’ll send a secure link to your account email."
       labelledBy="forgot-password-title"
-      footer={<p><Link href="/login">Back to sign in</Link></p>}
     >
         <form action={formAction} noValidate>
           <AuthField inputRef={emailRef} id="email" label="Email" name="email" type="email" autoComplete="email" aria-invalid={state.field === 'email'} aria-describedby={state.error ? 'forgot-password-error' : undefined} />
           <AuthFeedback error={state.error} errorId="forgot-password-error" message={state.message} messageId="forgot-password-message" />
           <AuthSubmitButton pendingLabel="Sending link..." label="Send reset link" />
         </form>
-    </AuthShell>
+    </PasswordRecoveryShell>
   );
 }

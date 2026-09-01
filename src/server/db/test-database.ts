@@ -57,11 +57,7 @@ function databaseNameFromUrl(url: URL, variableName: string) {
   return databaseName;
 }
 
-function assertTestDatabaseName(databaseName: string, variableName: string) {
-  if (!databaseName.endsWith(TEST_DATABASE_SUFFIX)) {
-    throw new Error(`${variableName} database name must end with "${TEST_DATABASE_SUFFIX}".`);
-  }
-
+function assertSafeDatabaseName(databaseName: string, variableName: string) {
   if (!SAFE_DATABASE_NAME.test(databaseName)) {
     throw new Error(`${variableName} database name must be a safe PostgreSQL identifier.`);
   }
@@ -69,6 +65,13 @@ function assertTestDatabaseName(databaseName: string, variableName: string) {
   if (new TextEncoder().encode(databaseName).byteLength > MAX_POSTGRES_IDENTIFIER_BYTES) {
     throw new Error(`${variableName} database name must be at most 63 UTF-8 bytes.`);
   }
+}
+
+function assertTestDatabaseName(databaseName: string, variableName: string) {
+  if (!databaseName.endsWith(TEST_DATABASE_SUFFIX)) {
+    throw new Error(`${variableName} database name must end with "${TEST_DATABASE_SUFFIX}".`);
+  }
+  assertSafeDatabaseName(databaseName, variableName);
 }
 
 export function resolveTestDatabaseUrl({
