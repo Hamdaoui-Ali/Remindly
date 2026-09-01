@@ -1,10 +1,9 @@
 'use client';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { isValidEmail } from '@/lib/validation/auth';
 
 const GENERIC_LOGIN_ERROR = 'Unable to sign in with those credentials.';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type LoginState = {
   error: string | null;
@@ -19,7 +18,7 @@ export async function loginAction(
   const email = formData.get('email');
   const password = formData.get('password');
 
-  if (typeof email !== 'string' || !EMAIL_PATTERN.test(email)) {
+  if (typeof email !== 'string' || !isValidEmail(email)) {
     return {
       error: GENERIC_LOGIN_ERROR,
       field: 'email',

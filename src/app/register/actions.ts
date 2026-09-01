@@ -1,8 +1,7 @@
 'use client';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { isValidEmail } from '@/lib/validation/auth';
 const GENERIC_REGISTER_ERROR = 'Unable to create your account. Please check your details and try again.';
 const SUCCESS_MESSAGE = 'Check your email to confirm your Remindly account.';
 
@@ -20,7 +19,7 @@ export async function registerAction(
   const email = formData.get('email');
   const password = formData.get('password');
   const confirmPassword = formData.get('confirmPassword');
-  if (typeof email !== 'string' || !EMAIL_PATTERN.test(email)) {
+  if (typeof email !== 'string' || !isValidEmail(email)) {
     return { error: GENERIC_REGISTER_ERROR, message: null, field: 'email', attempt: previousState.attempt + 1 };
   }
   if (typeof password !== 'string' || password.length < 8) {
