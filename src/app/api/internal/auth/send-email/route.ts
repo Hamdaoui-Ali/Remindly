@@ -54,13 +54,16 @@ export async function POST(request: Request) {
   try {
     const delivery = createConfiguredEmailDelivery();
     const timeout = env.GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS;
-    const result = await Promise.race([
-      delivery.send('AUTH', email),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('auth_hook_timeout')), timeout)),
-    ]);
-    if (result.status === 'blocked') return failure(429);
-    console.info('auth-email-hook completed', { runId, action: parsed.email_data.email_action_type, durationMs: Date.now() - startedAt });
-    return Response.json({}, { status: 200 });
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), timeout);
+    try {
+      const result = await delivery.send('AUTH', { ...email, signal: controller.signal });
+      if (result.status === 'blocked') return failure(429);
+      console.info('auth-email-hook completed', { runId, action: parsed.email_data.email_action_type, durationMs: Date.now() - startedAt });
+      return Response.json({}, { status: 200 });
+    } finally {
+      clearTimeout(deadline);
+    }
   } catch (error) {
     const message = error instanceof Error && error.message === 'auth_hook_timeout' ? 'timeout' : 'failure';
     console.error('auth-email-hook failed', { runId, durationMs: Date.now() - startedAt, code: message });
