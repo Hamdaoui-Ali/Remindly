@@ -11,7 +11,7 @@ are generated artifacts rather than maintainable application code.
 - Node.js `^20.19`, `^22.12`, or `>=24.0.0` (the Prisma 7 requirement; Next.js alone supports `>=20.9.0`)
 - npm
 - Docker with Docker Compose, or another PostgreSQL instance
-- A PostgreSQL database for local development; Gmail delivery is implemented behind a provider boundary and remains a later wiring/deployment slice
+- A PostgreSQL database for local development; Gmail delivery is implemented behind a provider boundary and can be enabled through configuration
 
 ## Local setup
 
@@ -57,7 +57,7 @@ are generated artifacts rather than maintainable application code.
 
    `npm run dev` keeps both processes in one terminal. Keep that terminal running for email reminders. Use `npm run dev:web` only when intentionally developing without automatic email processing.
 
-   Open `http://localhost:3000/login` and sign in with a Supabase Auth account. Registration and recovery pages are implemented in the next Auth-flow slice.
+   Open `http://localhost:3000/login` and sign in with a Supabase Auth account. Registration and password recovery pages are available through Supabase Auth.
 
 ## Verification
 
@@ -201,10 +201,11 @@ reminder ceiling. `budget-repository.ts` reserves capacity under a PostgreSQL
 transaction advisory lock, finalizes attempts with sanitized metadata, and
 converts stale reservations to `UNKNOWN_OUTCOME` after a worker crash.
 
-The pure circuit-breaker policy pauses calls after repeated Auth revocation,
-mailbox-limit, or configuration failures. These boundaries are tested but are
-not yet wired into the live reminder processor or Supabase Auth Hook; that is
-the next integration slice.
+The configured delivery service applies the circuit-breaker policy to both the
+reminder processor and Supabase Auth Hook. Repeated Auth revocation,
+mailbox-limit, or configuration failures pause Gmail calls. Circuit state is
+stored durably and is exposed only through the protected
+`GET /api/internal/email-health` diagnostics route.
 
 ### Scheduled trigger
 
@@ -215,7 +216,10 @@ It schedules the protected processor every minute and never embeds either
 secret in Git. Because `pg_net` is asynchronous, inspect its request result
 and the application's `ProcessorRun` heartbeat separately.
 
-The workflow in `.github/workflows/process-due-notifications.yml` calls the processor every ten minutes and can also be run manually. Add these encrypted GitHub repository secrets:
+The workflow in `.github/workflows/process-due-notifications.yml` is a manual
+fallback. It does not schedule itself; use Supabase Cron for the production
+minute-level trigger. Add these encrypted GitHub repository secrets when the
+manual fallback is needed:
 
 - `APP_URL`: the canonical deployed origin, such as `https://remindly.example.com`
 - `SCHEDULER_SECRET`: the same random value deployed as the application's `SCHEDULER_SECRET`

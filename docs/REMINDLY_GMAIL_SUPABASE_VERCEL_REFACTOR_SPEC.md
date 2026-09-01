@@ -3616,3 +3616,25 @@ The read-only cutover check is available as `npm run reminders:verify-cutover`.
 It reports aggregate readiness counts for ownership, deadlines, alert linkage,
 schedule versions, current alert notifications, and remaining legacy claimable
 notifications. A non-ready result exits with status 1 and never changes data.
+
+## 40.2. Implementation checkpoint — Gmail delivery and hosted trigger readiness
+
+The application integration slices are now present on branch `refacto`:
+
+1. Gmail and Resend are selected through the provider factory, with Gmail
+   OAuth configuration validated server-side.
+2. Reminder and Supabase Auth email delivery share the budget reservation,
+   attempt finalization, circuit protection, and provider-neutral delivery
+   service.
+3. Gmail circuit state is durable in the singleton `GmailCircuitState` row and
+   is available through the scheduler-secret-protected email health route.
+4. The Auth Hook enforces its bounded deadline and classifies ambiguous
+   provider timeouts without performing an in-request retry.
+5. The hosted Supabase profile-sync and minute-level `pg_cron`/`pg_net` SQL are
+   available under `infra/supabase/`.
+
+The remaining work is deployment rehearsal, not local application wiring:
+configure Gmail OAuth and Vercel secrets, apply the hosted Supabase profile
+and Cron SQL, verify `pg_net` responses against `ProcessorRun` records, run
+the reminder backfill and cutover checks against exported production data,
+and apply the strict cutover SQL only after every readiness count is zero.
