@@ -7,6 +7,7 @@ import { SETTINGS_SINGLETON_ID } from '@/server/settings/repository';
 const NOW = new Date('2026-08-19T12:00:00.000Z');
 const service = new ReminderService();
 const fixtureNames: string[] = [];
+const fixtureProfileIds: string[] = [];
 let originalSettings: {
   notificationEmail: string;
   timezone: string;
@@ -44,6 +45,10 @@ afterEach(async () => {
     await prisma.reminder.deleteMany({ where: { name: { in: fixtureNames } } });
     fixtureNames.length = 0;
   }
+  if (fixtureProfileIds.length > 0) {
+    await prisma.userProfile.deleteMany({ where: { id: { in: fixtureProfileIds } } });
+    fixtureProfileIds.length = 0;
+  }
   if (originalSettings) {
     await prisma.settings.update({
       where: { id: SETTINGS_SINGLETON_ID },
@@ -74,6 +79,30 @@ function input(name: string, overrides: Partial<{
 
 async function createFixture(overrides: Parameters<typeof input>[1] = {}) {
   return service.createReminder(input(`Lifecycle reminder ${crypto.randomUUID()}`, overrides), NOW);
+}
+
+async function createOwnedMultiAlertFixture() {
+  const profileId = crypto.randomUUID();
+  fixtureProfileIds.push(profileId);
+  await prisma.userProfile.create({
+    data: {
+      id: profileId,
+      email: `lifecycle-${profileId}@example.com`,
+      emailVerifiedAt: NOW,
+      timezone: 'Africa/Casablanca',
+    },
+  });
+  const name = `Owned multi-alert reminder ${crypto.randomUUID()}`;
+  fixtureNames.push(name);
+  const cycle = await service.createReminder(profileId, {
+    name,
+    dueAt: '2026-12-01T12:00:00.000Z',
+    alerts: [
+      { kind: 'offset', offsetMinutes: 1440 },
+      { kind: 'offset', offsetMinutes: 60 },
+    ],
+  }, NOW);
+  return { profileId, cycle };
 }
 
 async function createHistoricalNotifications(reminderId: string, scheduledFor: Date) {
@@ -133,6 +162,68 @@ async function waitForBlockedReminderUpdates(count: number) {
 }
 
 describe('ReminderService lifecycle', () => {
+  it('updates owned alert schedules while preserving sent history and replacing only obsolete unsent alerts', async () => {
+    const { profileId, cycle } = await createOwnedMultiAlertFixture();
+    const firstAlert = cycle.alerts?.[0];
+    const firstNotification = cycle.notifications?.[0];
+    const secondAlert = cycle.alerts?.[1];
+    const secondNotification = cycle.notifications?.[1];
+    if (!firstAlert || !firstNotification || !secondAlert || !secondNotification) {
+      throw new Error('Expected multi-alert fixture rows');
+    }
+    await prisma.notification.update({
+      where: { id: firstNotification.id },
+      data: { status: 'SENT', sentAt: NOW },
+    });
+
+    const result = await service.updateReminder(profileId, cycle.reminder.id, {
+      alerts: [
+        { kind: 'offset', offsetMinutes: 1440 },
+        { kind: 'offset', offsetMinutes: 120 },
+      ],
+    }, NOW);
+    const alerts = await prisma.reminderAlert.findMany({
+      where: { reminderId: cycle.reminder.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    const notifications = await prisma.notification.findMany({
+      where: { reminderId: cycle.reminder.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    expect(result.reminder.userId).toBe(profileId);
+    expect(alerts).toMatchObject([
+      { id: firstAlert.id, offsetMinutes: 1440, enabled: true, scheduleVersion: 1 },
+      { id: secondAlert.id, offsetMinutes: 60, enabled: false },
+      { offsetMinutes: 120, enabled: true, scheduleVersion: 1 },
+    ]);
+    expect(notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: firstNotification.id, status: 'SENT', reminderAlertId: firstAlert.id }),
+      expect.objectContaining({ id: secondNotification.id, status: 'CANCELLED', reminderAlertId: secondAlert.id }),
+      expect.objectContaining({ status: 'PENDING', scheduledFor: new Date('2026-12-01T10:00:00.000Z') }),
+    ]));
+  });
+
+  it('rejects an authenticated update when the reminder belongs to another profile', async () => {
+    const owner = await createOwnedMultiAlertFixture();
+    const otherProfileId = crypto.randomUUID();
+    fixtureProfileIds.push(otherProfileId);
+    await prisma.userProfile.create({
+      data: {
+        id: otherProfileId,
+        email: `other-${otherProfileId}@example.com`,
+        emailVerifiedAt: NOW,
+        timezone: 'UTC',
+      },
+    });
+
+    await expect(service.updateReminder(otherProfileId, owner.cycle.reminder.id, {
+      name: 'Should not change',
+    }, NOW)).rejects.toThrow('Reminder not found');
+    expect(await prisma.reminder.findUnique({ where: { id: owner.cycle.reminder.id } }))
+      .toMatchObject({ name: owner.cycle.reminder.name, userId: owner.profileId });
+  });
+
   it('creates one active reminder and one pending notification atomically', async () => {
     const cycle = await createFixture();
 
