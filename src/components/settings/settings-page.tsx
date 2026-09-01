@@ -11,6 +11,7 @@ import type { UserSettings } from '@/server/profile/service';
 import { isValidTimezone } from '@/server/settings/types';
 import { alertTimeSchema } from '@/server/validation/reminders';
 import { SettingsSection } from './settings-section';
+import { AccountDangerZone } from './account-danger-zone';
 import { z } from 'zod';
 
 type EditableSettings = Pick<UserSettings, 'timezone' | 'defaultAlertTime'>;
@@ -185,6 +186,7 @@ export function SettingsPage({ settings }: { settings: UserSettings }) {
           </div>
         </div>
       </form>
+      <AccountDangerZone />
     </main>
   );
 }
