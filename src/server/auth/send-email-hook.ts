@@ -44,12 +44,21 @@ function safeRedirect(redirectTo: string | undefined, appUrl: string): string {
   return redirect.toString();
 }
 
+function emailChangeTokens(payload: AuthHookPayload): { recipient: string; token: string; tokenHash: string } {
+  const { email_data: data, user } = payload;
+  if (user.new_email) {
+    return { recipient: user.new_email, token: data.token_new!, tokenHash: data.token_hash! };
+  }
+  return { recipient: user.email, token: data.token_new!, tokenHash: data.token_hash_new! };
+}
+
 export function buildAuthEmail(payload: AuthHookPayload, appUrl: string): SendEmailInput {
   const action = payload.email_data.email_action_type;
   const isNewEmail = action === 'email_change' && Boolean(payload.user.new_email);
-  const recipient = isNewEmail ? payload.user.new_email! : payload.user.email;
-  const token = isNewEmail ? payload.email_data.token_new! : payload.email_data.token!;
-  const tokenHash = isNewEmail ? payload.email_data.token_hash! : payload.email_data.token_hash!;
+  const emailChange = action === 'email_change' ? emailChangeTokens(payload) : null;
+  const recipient = emailChange?.recipient ?? payload.user.email;
+  const token = emailChange?.token ?? payload.email_data.token!;
+  const tokenHash = emailChange?.tokenHash ?? payload.email_data.token_hash!;
   const redirect = safeRedirect(payload.email_data.redirect_to, appUrl);
   const confirmation = new URL('/auth/confirm', appUrl);
   confirmation.searchParams.set(isNewEmail ? 'token' : 'token_hash', isNewEmail ? token : tokenHash);

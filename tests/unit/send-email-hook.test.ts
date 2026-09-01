@@ -38,6 +38,22 @@ describe('Supabase Auth email hook payloads', () => {
     expect(email.html).toContain('type=email_change');
   });
 
+  it('uses the new token hash for email change sent to the current address', () => {
+    const email = buildAuthEmail(parseAuthHookPayload({
+      user: { email: 'old@example.com' },
+      email_data: {
+        token_new: 'token-current',
+        token_hash_new: 'hash-current',
+        email_action_type: 'email_change',
+      },
+    }), 'http://localhost:3000');
+
+    expect(email.to).toBe('old@example.com');
+    expect(email.html).toContain('token_hash=hash-current');
+    expect(email.html).toContain('type=email_change');
+    expect(email.html).not.toContain('undefined');
+  });
+
   it('rejects unsupported actions and external redirects', () => {
     expect(() => parseAuthHookPayload({ ...base, email_data: { ...base.email_data, email_action_type: 'unknown' } })).toThrow();
     expect(() => buildAuthEmail(parseAuthHookPayload(base), 'https://remindly.example.com')).toThrow();
