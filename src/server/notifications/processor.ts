@@ -218,6 +218,7 @@ export async function processDueNotifications(
 
   const repository = new NotificationRepository(prisma);
   await reconcileMissingPendingNotifications(input.now);
+  await repository.cancelIneligibleAlertNotifications(input.now);
   const leaseExpiredBefore = new Date(input.now.getTime() - PROCESSING_LEASE_MILLISECONDS);
   const terminalLeaseFailures = await repository.reclaimExpiredProcessing({
     leaseExpiredBefore,
