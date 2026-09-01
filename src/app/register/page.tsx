@@ -1,16 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useEffect, useRef } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useActionState, useRef } from 'react';
 import { registerAction, type RegisterState } from './actions';
+import { AuthFeedback } from '@/components/auth/auth-feedback';
+import { AuthShell } from '@/components/auth/auth-shell';
+import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
+import { useAuthFieldFocus } from '@/components/auth/use-auth-field-focus';
 
 const initialState: RegisterState = { error: null, message: null, field: null, attempt: 0 };
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return <button type="submit" disabled={pending}>{pending ? 'Creating account...' : 'Create account'}</button>;
-}
 
 export default function RegisterPage() {
   const [state, formAction] = useActionState(registerAction, initialState);
@@ -18,18 +16,15 @@ export default function RegisterPage() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const field = state.field === 'email' ? emailRef : state.field === 'password' ? passwordRef : confirmRef;
-    field.current?.focus();
-  }, [state.attempt, state.field]);
+  useAuthFieldFocus(state.field, state.attempt, { email: emailRef, password: passwordRef, confirmPassword: confirmRef });
 
   return (
-    <main className="login-shell" aria-labelledby="register-title">
-      <section className="login-panel">
-        <p className="wordmark">Remindly</p>
-        <h1 id="register-title">Create your account</h1>
-        <p>Keep your deadline reminders in one private workspace.</p>
-
+    <AuthShell
+      title="Create your account"
+      description="Keep your deadline reminders in one private workspace."
+      labelledBy="register-title"
+      footer={<p><Link href="/login">Already have an account? Sign in</Link></p>}
+    >
         <form action={formAction} noValidate>
           <div className="login-field">
             <label htmlFor="email">Email</label>
@@ -44,12 +39,9 @@ export default function RegisterPage() {
             <input ref={confirmRef} id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" aria-invalid={state.field === 'confirmPassword'} aria-describedby={state.error ? 'register-error' : undefined} />
           </div>
 
-          {state.error ? <p id="register-error" className="login-error" role="alert">{state.error}</p> : null}
-          {state.message ? <p id="register-message" role="status">{state.message}</p> : null}
-          <SubmitButton />
+          <AuthFeedback error={state.error} errorId="register-error" message={state.message} messageId="register-message" />
+          <AuthSubmitButton pendingLabel="Creating account..." label="Create account" />
         </form>
-        <p><Link href="/login">Already have an account? Sign in</Link></p>
-      </section>
-    </main>
+    </AuthShell>
   );
 }

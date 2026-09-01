@@ -1,47 +1,30 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useActionState, useRef } from 'react';
 import Link from 'next/link';
 
 import { loginAction, type LoginState } from '@/app/login/actions';
+import { AuthFeedback } from '@/components/auth/auth-feedback';
+import { AuthShell } from '@/components/auth/auth-shell';
+import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
+import { useAuthFieldFocus } from '@/components/auth/use-auth-field-focus';
 
-const initialState: LoginState = {
-  error: null,
-  field: null,
-  attempt: 0,
-};
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <button type="submit" disabled={pending}>
-      {pending ? 'Signing in...' : 'Sign in'}
-    </button>
-  );
-}
+const initialState: LoginState = { error: null, field: null, attempt: 0 };
 
 export default function LoginPage() {
   const [state, formAction] = useActionState(loginAction, initialState);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (state.field === 'email') {
-      emailRef.current?.focus();
-    } else if (state.field === 'password') {
-      passwordRef.current?.focus();
-    }
-  }, [state.attempt, state.field]);
+  useAuthFieldFocus(state.field, state.attempt, { email: emailRef, password: passwordRef });
 
   return (
-    <main className="login-shell" aria-labelledby="login-title">
-      <section className="login-panel">
-        <p className="wordmark">Remindly</p>
-        <h1 id="login-title">Sign in</h1>
-        <p>Access your private reminder workspace.</p>
-
+    <AuthShell
+      title="Sign in"
+      description="Access your private reminder workspace."
+      labelledBy="login-title"
+      footer={<><p><Link href="/forgot-password">Forgot your password?</Link></p><p><Link href="/register">Need an account? Create one</Link></p></>}
+    >
         <form action={formAction} noValidate>
           <div className="login-field">
             <label htmlFor="email">Email</label>
@@ -71,17 +54,9 @@ export default function LoginPage() {
             />
           </div>
 
-          {state.error ? (
-            <p id="login-error" className="login-error" role="alert">
-              {state.error}
-            </p>
-          ) : null}
-
-          <SubmitButton />
+          <AuthFeedback error={state.error} errorId="login-error" message={null} messageId="login-message" />
+          <AuthSubmitButton pendingLabel="Signing in..." label="Sign in" />
         </form>
-        <p><Link href="/forgot-password">Forgot your password?</Link></p>
-        <p><Link href="/register">Need an account? Create one</Link></p>
-      </section>
-    </main>
+    </AuthShell>
   );
 }
