@@ -59,6 +59,7 @@ export interface BackfillReport {
   remindersConverted: number;
   alertsCreated: number;
   notificationsLinked: number;
+  notificationsCreated: number;
   alreadyMigrated: number;
   missingOwners: number;
   missingNotifications: number;

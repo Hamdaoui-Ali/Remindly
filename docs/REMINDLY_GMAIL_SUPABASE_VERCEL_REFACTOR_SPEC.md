@@ -3602,7 +3602,7 @@ The next migration slice now includes a dry-run-by-default backfill plan at
 `npm run reminders:backfill`. It converts each owned legacy reminder's
 `endDate` + `alertTime` into a timezone-aware `dueAt`, preserves its existing
 legacy `alertAt` instant as a version-one `ReminderAlert`, and links the
-current notification row or creates one when it is missing. Existing
+current notification row or creates a version-one pending notification when it is missing. Existing
 notification status, including `SENT`, is not changed by the linking action.
 
 The command prints only aggregate counts and sanitized issue codes. It applies

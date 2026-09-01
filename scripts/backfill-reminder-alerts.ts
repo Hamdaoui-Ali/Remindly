@@ -12,6 +12,7 @@ function emptyReport(): BackfillReport {
     remindersConverted: 0,
     alertsCreated: 0,
     notificationsLinked: 0,
+    notificationsCreated: 0,
     alreadyMigrated: 0,
     missingOwners: 0,
     missingNotifications: 0,
@@ -90,6 +91,7 @@ async function main() {
       report.remindersConverted += 1;
       report.alertsCreated += 1;
       report.notificationsLinked += plan.notificationUpdates.length;
+      report.notificationsCreated += plan.notificationCreate ? 1 : 0;
 
       if (dryRun) continue;
       await prisma.$transaction(async (tx) => {
@@ -111,6 +113,20 @@ async function main() {
             data: {
               reminderAlertId: update.reminderAlertId,
               scheduleVersion: update.scheduleVersion,
+            },
+          });
+        }
+        if (plan.notificationCreate) {
+          await tx.notification.create({
+            data: {
+              id: plan.notificationCreate.id,
+              reminderId: plan.notificationCreate.reminderId,
+              reminderAlertId: plan.notificationCreate.reminderAlertId,
+              scheduledFor: plan.notificationCreate.scheduledFor,
+              scheduleVersion: plan.notificationCreate.scheduleVersion,
+              channel: plan.notificationCreate.channel,
+              status: plan.notificationCreate.status,
+              idempotencyKey: plan.notificationCreate.idempotencyKey,
             },
           });
         }
