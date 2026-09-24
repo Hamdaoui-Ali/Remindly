@@ -1,7 +1,7 @@
 # Remindly registration and password-recovery audit
 
-Date: 2026-09-24  
-Capture: Playwright Chromium fallback against the production server on `http://localhost:3001`  
+Date: 2026-09-24
+Capture: Playwright Chromium fallback against the production server on `http://localhost:3001`
 Viewports: 1440 × 1024 desktop and 390 × 844 mobile
 
 ## Overall verdict
