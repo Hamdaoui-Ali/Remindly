@@ -19,14 +19,44 @@ beforeEach(() => {
 });
 
 describe('registerAction', () => {
-  it('validates email, password, and confirmation locally', async () => {
+  it('explains malformed email input locally', async () => {
     const formData = new FormData();
     formData.set('email', 'bad');
     formData.set('password', 'short');
     formData.set('confirmPassword', 'different');
 
-    await expect(registerAction(initialState, formData)).resolves.toMatchObject({ field: 'email', attempt: 1 });
+    await expect(registerAction(initialState, formData)).resolves.toMatchObject({
+      error: 'Enter a valid email address.',
+      field: 'email',
+      attempt: 1,
+    });
     expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
+  });
+
+  it('explains short passwords locally', async () => {
+    const formData = new FormData();
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'short');
+    formData.set('confirmPassword', 'short');
+
+    await expect(registerAction(initialState, formData)).resolves.toMatchObject({
+      error: 'Use at least 8 characters.',
+      field: 'password',
+      attempt: 1,
+    });
+  });
+
+  it('explains mismatched passwords locally', async () => {
+    const formData = new FormData();
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'secure-password');
+    formData.set('confirmPassword', 'different-password');
+
+    await expect(registerAction(initialState, formData)).resolves.toMatchObject({
+      error: 'Passwords do not match.',
+      field: 'confirmPassword',
+      attempt: 1,
+    });
   });
 
   it('returns a generic error for Supabase failures', async () => {
