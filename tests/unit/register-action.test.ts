@@ -2,19 +2,22 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createBrowserSupabaseClient, signUp } = vi.hoisted(() => ({
-  createBrowserSupabaseClient: vi.fn(),
+const { createServerSupabaseClient, serverEnv, signUp } = vi.hoisted(() => ({
+  createServerSupabaseClient: vi.fn(),
+  serverEnv: vi.fn(),
   signUp: vi.fn(),
 }));
 
-vi.mock('@/lib/supabase/client', () => ({ createBrowserSupabaseClient }));
+vi.mock('@/lib/supabase/server', () => ({ createServerSupabaseClient }));
+vi.mock('@/lib/env', () => ({ serverEnv }));
 
 import { registerAction } from '@/app/register/actions';
 
 const initialState = { error: null, message: null, field: null, attempt: 0 } as const;
 
 beforeEach(() => {
-  createBrowserSupabaseClient.mockReset().mockReturnValue({ auth: { signUp } });
+  createServerSupabaseClient.mockReset().mockResolvedValue({ auth: { signUp } });
+  serverEnv.mockReset().mockReturnValue({ APP_URL: 'https://remindlly.vercel.app' });
   signUp.mockReset();
 });
 
@@ -30,7 +33,7 @@ describe('registerAction', () => {
       field: 'email',
       attempt: 1,
     });
-    expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
+    expect(createServerSupabaseClient).not.toHaveBeenCalled();
   });
 
   it('explains short passwords locally', async () => {
@@ -103,7 +106,22 @@ describe('registerAction', () => {
     expect(signUp).toHaveBeenCalledWith({
       email: 'user@example.com',
       password: 'secure-password',
-      options: { emailRedirectTo: 'http://localhost:3000/auth/confirm' },
+      options: { emailRedirectTo: 'https://remindlly.vercel.app/auth/confirm' },
     });
+  });
+
+  it('uses the canonical server app URL for the confirmation redirect', async () => {
+    signUp.mockResolvedValue({ error: null });
+    const formData = new FormData();
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'secure-password');
+    formData.set('confirmPassword', 'secure-password');
+
+    await registerAction(initialState, formData);
+
+    expect(serverEnv).toHaveBeenCalled();
+    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({
+      options: { emailRedirectTo: 'https://remindlly.vercel.app/auth/confirm' },
+    }));
   });
 });

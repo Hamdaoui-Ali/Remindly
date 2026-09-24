@@ -1,6 +1,7 @@
-'use client';
+'use server';
 
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { serverEnv } from '@/lib/env';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isValidEmail } from '@/lib/validation/auth';
 const GENERIC_REGISTER_ERROR = 'Unable to create your account. Please check your details and try again.';
 const INVALID_EMAIL_ERROR = 'Enter a valid email address.';
@@ -48,10 +49,11 @@ export async function registerAction(
   }
 
   try {
-    const { error } = await createBrowserSupabaseClient().auth.signUp({
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+      options: { emailRedirectTo: `${serverEnv().APP_URL}/auth/confirm` },
     });
     if (error) throw error;
     return { error: null, message: SUCCESS_MESSAGE, field: null, attempt: previousState.attempt };
