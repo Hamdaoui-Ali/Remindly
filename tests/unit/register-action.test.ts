@@ -59,7 +59,7 @@ describe('registerAction', () => {
     });
   });
 
-  it('returns a generic error for Supabase failures', async () => {
+  it('explains when the email is already registered', async () => {
     signUp.mockResolvedValue({ error: new Error('email already registered') });
     const formData = new FormData();
     formData.set('email', 'user@example.com');
@@ -67,7 +67,21 @@ describe('registerAction', () => {
     formData.set('confirmPassword', 'secure-password');
 
     await expect(registerAction(initialState, formData)).resolves.toMatchObject({
-      error: 'Unable to create your account. Please check your details and try again.',
+      error: 'An account with this email already exists. Try signing in.',
+      field: 'email',
+      attempt: 1,
+    });
+  });
+
+  it('explains a Supabase email validation failure', async () => {
+    signUp.mockResolvedValue({ error: new Error('Email address is invalid') });
+    const formData = new FormData();
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'secure-password');
+    formData.set('confirmPassword', 'secure-password');
+
+    await expect(registerAction(initialState, formData)).resolves.toMatchObject({
+      error: 'Enter a valid email address.',
       field: 'email',
       attempt: 1,
     });

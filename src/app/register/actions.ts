@@ -8,6 +8,21 @@ const SHORT_PASSWORD_ERROR = 'Use at least 8 characters.';
 const PASSWORD_MISMATCH_ERROR = 'Passwords do not match.';
 const SUCCESS_MESSAGE = 'Check your email to confirm your Remindly account.';
 
+function registerErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (message.includes('email address') && message.includes('invalid')) return INVALID_EMAIL_ERROR;
+  if (message.includes('already registered') || message.includes('already been registered')) {
+    return 'An account with this email already exists. Try signing in.';
+  }
+  if (message.includes('rate limit') || message.includes('too many requests')) {
+    return 'Too many attempts. Please wait a few minutes and try again.';
+  }
+  if (message.includes('redirect') && message.includes('not allowed')) {
+    return 'Authentication redirect is not configured for this address.';
+  }
+  return GENERIC_REGISTER_ERROR;
+}
+
 export type RegisterState = {
   error: string | null;
   message: string | null;
@@ -40,7 +55,7 @@ export async function registerAction(
     });
     if (error) throw error;
     return { error: null, message: SUCCESS_MESSAGE, field: null, attempt: previousState.attempt };
-  } catch {
-    return { error: GENERIC_REGISTER_ERROR, message: null, field: 'email', attempt: previousState.attempt + 1 };
+  } catch (error) {
+    return { error: registerErrorMessage(error), message: null, field: 'email', attempt: previousState.attempt + 1 };
   }
 }
