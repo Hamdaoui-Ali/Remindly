@@ -8,6 +8,7 @@ const GENERIC_LOGIN_ERROR = 'Unable to sign in with those credentials.';
 export type LoginState = {
   error: string | null;
   field: 'email' | 'password' | null;
+  focus: 'email' | 'password' | null;
   attempt: number;
 };
 
@@ -22,6 +23,7 @@ export async function loginAction(
     return {
       error: GENERIC_LOGIN_ERROR,
       field: 'email',
+      focus: 'email',
       attempt: previousState.attempt + 1,
     };
   }
@@ -30,6 +32,7 @@ export async function loginAction(
     return {
       error: GENERIC_LOGIN_ERROR,
       field: 'password',
+      focus: 'password',
       attempt: previousState.attempt + 1,
     };
   }
@@ -41,17 +44,19 @@ export async function loginAction(
     if (error || !data.user?.email_confirmed_at) {
       return {
         error: GENERIC_LOGIN_ERROR,
-        field: 'email',
+        field: null,
+        focus: 'email',
         attempt: previousState.attempt + 1,
       };
     }
 
     window.location.assign('/');
-    return { error: null, field: null, attempt: previousState.attempt };
+    return { error: null, field: null, focus: null, attempt: previousState.attempt };
   } catch {
     return {
       error: GENERIC_LOGIN_ERROR,
-      field: 'email',
+      field: null,
+      focus: 'email',
       attempt: previousState.attempt + 1,
     };
   }
