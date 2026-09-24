@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/client', () => ({ createBrowserSupabaseClient }));
 
 import { loginAction } from '@/app/login/actions';
 
-const initialState = { error: null, field: null, attempt: 0 } as const;
+const initialState = { error: null, field: null, focus: null, attempt: 0 } as const;
 
 beforeEach(() => {
   createBrowserSupabaseClient.mockReset();
@@ -41,7 +41,8 @@ describe('loginAction', () => {
 
     await expect(loginAction(initialState, formData)).resolves.toMatchObject({
       error: 'Unable to sign in with those credentials.',
-      field: 'email',
+      field: null,
+      focus: 'email',
       attempt: 1,
     });
     expect(signInWithPassword).toHaveBeenCalledWith({
@@ -61,7 +62,8 @@ describe('loginAction', () => {
 
     await expect(loginAction(initialState, formData)).resolves.toMatchObject({
       error: 'Unable to sign in with those credentials.',
-      field: 'email',
+      field: null,
+      focus: 'email',
       attempt: 1,
     });
   });

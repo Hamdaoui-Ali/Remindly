@@ -3,6 +3,7 @@
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { isValidEmail } from '@/lib/validation/auth';
 const GENERIC_FORGOT_ERROR = 'Unable to send the password reset email. Please check your details and try again.';
+const INVALID_EMAIL_ERROR = 'Enter a valid email address.';
 const RESET_MESSAGE = 'If an account exists for that email, we sent a password reset link.';
 const GENERIC_RESET_ERROR = 'Unable to update your password. Please try again.';
 
@@ -23,7 +24,7 @@ export async function forgotPasswordAction(
 ): Promise<PasswordRecoveryState> {
   const email = formData.get('email');
   if (typeof email !== 'string' || !isValidEmail(email)) {
-    return invalid(previousState, 'email', GENERIC_FORGOT_ERROR);
+    return invalid(previousState, 'email', INVALID_EMAIL_ERROR);
   }
 
   try {

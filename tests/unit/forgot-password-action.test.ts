@@ -27,7 +27,7 @@ describe('forgotPasswordAction', () => {
     formData.set('email', 'bad');
 
     await expect(forgotPasswordAction(initialForgotState, formData)).resolves.toMatchObject({
-      error: 'Unable to send the password reset email. Please check your details and try again.',
+      error: 'Enter a valid email address.',
       field: 'email',
       attempt: 1,
     });
