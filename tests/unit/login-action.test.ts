@@ -51,6 +51,20 @@ describe('loginAction', () => {
     });
   });
 
+  it('trims surrounding whitespace before signing in', async () => {
+    signInWithPassword.mockResolvedValue({ error: new Error('invalid credentials') });
+    const formData = new FormData();
+    formData.set('email', ' user@example.com ');
+    formData.set('password', 'password');
+
+    await loginAction(initialState, formData);
+
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: 'user@example.com',
+      password: 'password',
+    });
+  });
+
   it('blocks a user whose email is not confirmed', async () => {
     signInWithPassword.mockResolvedValue({
       data: { user: { email_confirmed_at: null } },

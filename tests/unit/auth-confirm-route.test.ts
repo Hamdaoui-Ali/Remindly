@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { verifyOtp, createServerSupabaseClient, appUrl } = vi.hoisted(() => ({
+const { verifyOtp, exchangeCodeForSession, createServerSupabaseClient, appUrl } = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
+  exchangeCodeForSession: vi.fn(),
   createServerSupabaseClient: vi.fn(),
   appUrl: vi.fn(),
 }));
@@ -13,7 +14,8 @@ import { GET } from '@/app/auth/confirm/route';
 
 beforeEach(() => {
   verifyOtp.mockReset().mockResolvedValue({ error: null });
-  createServerSupabaseClient.mockResolvedValue({ auth: { verifyOtp } });
+  exchangeCodeForSession.mockReset().mockResolvedValue({ error: null });
+  createServerSupabaseClient.mockResolvedValue({ auth: { verifyOtp, exchangeCodeForSession } });
   appUrl.mockReturnValue('http://localhost:3000');
 });
 
@@ -24,6 +26,15 @@ describe('GET /auth/confirm', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost:3000/login');
     expect(verifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-1', type: 'recovery' });
+  });
+
+  it('exchanges PKCE confirmation codes for a session', async () => {
+    const response = await GET(new Request('http://localhost:3000/auth/confirm?code=pkce-code'));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost:3000/');
+    expect(exchangeCodeForSession).toHaveBeenCalledWith('pkce-code');
+    expect(verifyOtp).not.toHaveBeenCalled();
   });
 
   it('rejects malformed links without calling Supabase', async () => {
