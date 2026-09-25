@@ -35,7 +35,8 @@ export async function registerAction(
   previousState: RegisterState,
   formData: FormData,
 ): Promise<RegisterState> {
-  const email = formData.get('email');
+  const rawEmail = formData.get('email');
+  const email = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;
   const password = formData.get('password');
   const confirmPassword = formData.get('confirmPassword');
   if (typeof email !== 'string' || !isValidEmail(email)) {

@@ -36,6 +36,20 @@ describe('registerAction', () => {
     expect(createServerSupabaseClient).not.toHaveBeenCalled();
   });
 
+  it('trims surrounding whitespace before submitting a valid email', async () => {
+    signUp.mockResolvedValue({ error: null });
+    const formData = new FormData();
+    formData.set('email', ' owner@example.com ');
+    formData.set('password', 'secure-password');
+    formData.set('confirmPassword', 'secure-password');
+
+    await expect(registerAction(initialState, formData)).resolves.toMatchObject({
+      error: null,
+      message: 'Check your email to confirm your Remindly account.',
+    });
+    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({ email: 'owner@example.com' }));
+  });
+
   it('explains short passwords locally', async () => {
     const formData = new FormData();
     formData.set('email', 'user@example.com');
