@@ -2,14 +2,14 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createServerSupabaseClient, serverEnv, signUp } = vi.hoisted(() => ({
+const { appUrl, createServerSupabaseClient, signUp } = vi.hoisted(() => ({
+  appUrl: vi.fn(),
   createServerSupabaseClient: vi.fn(),
-  serverEnv: vi.fn(),
   signUp: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({ createServerSupabaseClient }));
-vi.mock('@/lib/env', () => ({ serverEnv }));
+vi.mock('@/lib/env', () => ({ appUrl }));
 
 import { registerAction } from '@/app/register/actions';
 
@@ -17,7 +17,7 @@ const initialState = { error: null, message: null, field: null, attempt: 0 } as 
 
 beforeEach(() => {
   createServerSupabaseClient.mockReset().mockResolvedValue({ auth: { signUp } });
-  serverEnv.mockReset().mockReturnValue({ APP_URL: 'https://remindlly.vercel.app' });
+  appUrl.mockReset().mockReturnValue('https://remindlly.vercel.app');
   signUp.mockReset();
 });
 
@@ -124,7 +124,7 @@ describe('registerAction', () => {
     });
   });
 
-  it('uses the canonical server app URL for the confirmation redirect', async () => {
+  it('uses the canonical app URL without requiring unrelated server configuration', async () => {
     signUp.mockResolvedValue({ error: null });
     const formData = new FormData();
     formData.set('email', 'user@example.com');
@@ -133,7 +133,7 @@ describe('registerAction', () => {
 
     await registerAction(initialState, formData);
 
-    expect(serverEnv).toHaveBeenCalled();
+    expect(appUrl).toHaveBeenCalled();
     expect(signUp).toHaveBeenCalledWith(expect.objectContaining({
       options: { emailRedirectTo: 'https://remindlly.vercel.app/auth/confirm' },
     }));

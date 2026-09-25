@@ -1,6 +1,6 @@
 'use server';
 
-import { serverEnv } from '@/lib/env';
+import { appUrl } from '@/lib/env';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isValidEmail } from '@/lib/validation/auth';
 const GENERIC_REGISTER_ERROR = 'Unable to create your account. Please check your details and try again.';
@@ -54,7 +54,7 @@ export async function registerAction(
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${serverEnv().APP_URL}/auth/confirm` },
+      options: { emailRedirectTo: `${appUrl()}/auth/confirm` },
     });
     if (error) throw error;
     return { error: null, message: SUCCESS_MESSAGE, field: null, attempt: previousState.attempt };

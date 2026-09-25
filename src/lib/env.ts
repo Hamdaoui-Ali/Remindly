@@ -10,6 +10,8 @@ const supabaseEnvSchema = supabasePublicEnvSchema.extend({
   SUPABASE_SEND_EMAIL_HOOK_SECRET: z.string().min(1).optional(),
 });
 
+const appUrlSchema = z.string().url();
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
@@ -61,4 +63,8 @@ export function parseServerEnv(input: Record<string, unknown>): ServerEnv {
 
 export function serverEnv(): ServerEnv {
   return parseServerEnv(process.env);
+}
+
+export function appUrl(): string {
+  return appUrlSchema.parse(process.env.APP_URL);
 }

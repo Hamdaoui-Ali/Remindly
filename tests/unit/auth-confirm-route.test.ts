@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { verifyOtp, createServerSupabaseClient, serverEnv } = vi.hoisted(() => ({
+const { verifyOtp, createServerSupabaseClient, appUrl } = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   createServerSupabaseClient: vi.fn(),
-  serverEnv: vi.fn(),
+  appUrl: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({ createServerSupabaseClient }));
-vi.mock('@/lib/env', () => ({ serverEnv }));
+vi.mock('@/lib/env', () => ({ appUrl }));
 
 import { GET } from '@/app/auth/confirm/route';
 
 beforeEach(() => {
   verifyOtp.mockReset().mockResolvedValue({ error: null });
   createServerSupabaseClient.mockResolvedValue({ auth: { verifyOtp } });
-  serverEnv.mockReturnValue({ APP_URL: 'http://localhost:3000' });
+  appUrl.mockReturnValue('http://localhost:3000');
 });
 
 describe('GET /auth/confirm', () => {
