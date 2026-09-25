@@ -16,7 +16,8 @@ export async function loginAction(
   previousState: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const email = formData.get('email');
+  const rawEmail = formData.get('email');
+  const email = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;
   const password = formData.get('password');
 
   if (typeof email !== 'string' || !isValidEmail(email)) {
