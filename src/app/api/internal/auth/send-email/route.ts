@@ -10,6 +10,19 @@ function failure(httpCode: 400 | 401 | 429 | 503) {
   return Response.json({ error: { http_code: httpCode, message: FAILURE_MESSAGE } }, { status: httpCode });
 }
 
+function configurationIssuePaths(error: unknown): string[] {
+  if (!error || typeof error !== 'object' || !('issues' in error) || !Array.isArray(error.issues)) {
+    return ['unknown'];
+  }
+
+  return error.issues.map((issue: unknown) => {
+    if (!issue || typeof issue !== 'object' || !('path' in issue) || !Array.isArray(issue.path)) {
+      return 'unknown';
+    }
+    return issue.path.map(String).join('.') || 'root';
+  });
+}
+
 export async function POST(request: Request) {
   const runId = randomUUID();
   const startedAt = Date.now();
@@ -23,7 +36,11 @@ export async function POST(request: Request) {
   let env: ReturnType<typeof serverEnv>;
   try {
     env = serverEnv();
-  } catch {
+  } catch (error) {
+    console.error('auth-email-hook configuration invalid', {
+      runId,
+      fields: configurationIssuePaths(error),
+    });
     return failure(503);
   }
 

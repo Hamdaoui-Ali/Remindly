@@ -45,6 +45,27 @@ function request(body = payload, valid = true) {
 }
 
 describe('POST /api/internal/auth/send-email', () => {
+  it('returns a sanitized 503 when the server email configuration is invalid', async () => {
+    const originalAppUrl = process.env.APP_URL;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    delete process.env.APP_URL;
+
+    try {
+      const response = await POST(new Request('http://localhost/api/internal/auth/send-email', {
+        method: 'POST',
+        body: '{}',
+      }));
+
+      expect(response.status).toBe(503);
+      expect(error).toHaveBeenCalledWith('auth-email-hook configuration invalid', expect.objectContaining({
+        fields: ['APP_URL'],
+      }));
+    } finally {
+      process.env.APP_URL = originalAppUrl;
+      error.mockRestore();
+    }
+  });
+
   it('rejects invalid Standard Webhooks signatures before payload use', async () => {
     process.env.SUPABASE_SEND_EMAIL_HOOK_SECRET = configuredSecret;
 
