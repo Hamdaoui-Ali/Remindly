@@ -403,3 +403,37 @@ public URL -> login/session -> dashboard -> reminders -> settings -> Vercel logs
 ```
 
 The dashboard must render real content, not only an HTML shell. A Vercel **Ready** badge is not sufficient by itself.
+
+## 17. Incident record: the first production failure
+
+The first public failure looked like this in the browser:
+
+```text
+This page couldn’t load
+A server error occurred. Reload to try again.
+ERROR 2856739915
+```
+
+Vercel showed the deployment as **Ready**, but runtime logs showed HTTP 500 for `GET /`:
+
+```text
+PrismaClientKnownRequestError P2021:
+The table public.user_profiles does not exist in the current database.
+```
+
+The root cause was a schema/runtime mismatch. The repository contained the `user_profiles` migration, but the production database had no application migrations applied. The Vercel build ran `next build`; it did not run `prisma migrate deploy`, so a green build did not guarantee a usable database.
+
+The browser’s minified React error `#441` was a secondary symptom of the server response and not the root cause. Always inspect Vercel runtime logs before changing client components when the page fails during server rendering.
+
+The repair sequence was:
+
+1. Confirm the production database target without exposing credentials.
+2. Apply all seven pending Prisma migrations.
+3. Reload the public page and inspect the new runtime result.
+4. Discover the next error, `Dashboard settings are not configured`, which meant the table existed but existing Auth users had no profiles.
+5. Apply `infra/supabase/001-profile-sync.sql`.
+6. Backfill the three existing Auth users into `public.user_profiles` with explicit timestamps.
+7. Verify three Auth users, three profiles, zero missing profiles, two profile triggers, and an up-to-date migration status.
+8. Reload the dashboard and smoke-test `/reminders`.
+
+The public dashboard then rendered successfully and Vercel’s current error filter returned zero errors.
