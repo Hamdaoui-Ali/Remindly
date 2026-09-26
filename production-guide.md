@@ -327,3 +327,18 @@ The successful Vercel build proves that the Next.js bundle compiled. It does not
 Because the current `build` script is only `next build`, do not assume a Vercel redeploy applies Prisma migrations. Run migrations through the controlled production procedure in Section 10 before or alongside the deployment, then verify the resulting runtime logs.
 
 When changing build settings, use a Preview deployment first. Confirm the exact commit, environment target, build output, and runtime behavior before promoting or pushing to `main`.
+
+## 14. Configure and verify the public domain
+
+The production project uses the Vercel domain `remindlly.vercel.app` (the spelling has two `l` characters before `.vercel.app`). It is attached to the production deployment in the Vercel project.
+
+Find it in Vercel at **Project → Settings → Domains**. The domain page is where you verify:
+
+- The domain is assigned to the intended project.
+- The production branch/deployment is the target.
+- HTTPS is active.
+- There are no conflicting redirects or duplicate domain assignments.
+
+After a domain change, update `APP_URL` in Vercel and the matching GitHub Actions secret. Also update Supabase Authentication’s site URL and redirect allow-list. Test the exact canonical URL from a fresh browser session, not only the Vercel deployment URL.
+
+A domain can be attached and the deployment can be marked **Ready** while the application still returns a server error. Domain status validates routing; it does not validate database migrations, Auth profile synchronization, or runtime code paths.
