@@ -16,10 +16,26 @@ const common = {
 
 describe('createEmailProvider', () => {
   it('creates Gmail from complete Gmail configuration', () => {
-    expect(createEmailProvider({ ...common, emailProvider: 'gmail' })).toBeInstanceOf(GmailEmailProvider);
+    expect(createEmailProvider({
+      emailProvider: 'gmail',
+      gmailClientId: common.gmailClientId,
+      gmailClientSecret: common.gmailClientSecret,
+      gmailRefreshToken: common.gmailRefreshToken,
+      gmailSenderEmail: common.gmailSenderEmail,
+      gmailSenderName: common.gmailSenderName,
+      gmailRequestTimeoutMs: common.gmailRequestTimeoutMs,
+    })).toBeInstanceOf(GmailEmailProvider);
   });
 
   it('creates Resend for the compatibility provider', () => {
     expect(createEmailProvider({ ...common, emailProvider: 'resend' })).toBeInstanceOf(ResendEmailProvider);
+  });
+
+  it('rejects incomplete Resend configuration at the provider boundary', () => {
+    expect(() => createEmailProvider({
+      ...common,
+      emailProvider: 'resend',
+      resendApiKey: undefined,
+    })).toThrow('RESEND_API_KEY');
   });
 });
