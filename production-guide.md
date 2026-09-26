@@ -305,3 +305,25 @@ Use this target matrix as the baseline:
 Vercel shows secret values as encrypted/hidden after saving. Use the variable name, environment target, and **Last Updated** metadata for audits; do not reveal values just to verify that a variable exists. If a variable is changed, create a new deployment or redeploy the affected deployment because existing serverless instances keep the environment they were built with.
 
 Do not put `TEST_DATABASE_URL` in Production. Keep test databases isolated and named with a `_test` suffix.
+
+## 13. Vercel build and runtime settings
+
+In **Settings → Build and Deployment**, verify the project settings match the repository:
+
+- Framework preset: Next.js.
+- Root directory: repository root.
+- Install command: the package manager’s normal install command, normally `npm install`/Vercel’s detected install step.
+- Build command: `npm run build`, which resolves to `next build` in `package.json`.
+- Production branch: `main`.
+- Node.js version: use a version supported by both the repository’s Prisma requirement and the selected Vercel runtime.
+
+The successful Vercel build proves that the Next.js bundle compiled. It does not prove that the connected PostgreSQL schema is current or that Auth profile rows exist. Treat these as separate gates:
+
+1. Build gate: Vercel deployment reaches **Ready**.
+2. Schema gate: `npx prisma migrate status` reports no pending migrations.
+3. Auth/profile gate: Supabase Auth users have matching `public.user_profiles` rows.
+4. Runtime gate: the public route and authenticated dashboard return successfully.
+
+Because the current `build` script is only `next build`, do not assume a Vercel redeploy applies Prisma migrations. Run migrations through the controlled production procedure in Section 10 before or alongside the deployment, then verify the resulting runtime logs.
+
+When changing build settings, use a Preview deployment first. Confirm the exact commit, environment target, build output, and runtime behavior before promoting or pushing to `main`.
