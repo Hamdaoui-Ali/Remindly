@@ -364,3 +364,42 @@ Configure the GitHub repository secrets at **GitHub â†’ Hamdaoui-Ali/Remindly â†
 The local worker runs every 30 seconds through `npm run dev`; GitHub Actions is a fallback for hosted processing. The checked-in workflow currently declares `workflow_dispatch`, so a recurring cron schedule must be added and reviewed separately if automatic GitHub scheduling is desired.
 
 Keep the processor endpoint internal. Do not remove its shared-secret check, and do not place the secret in a URL query string where it could be logged.
+
+## 16. Production deployment and verification
+
+Use this order for a release:
+
+1. Review the working tree and confirm the intended commit is on the release branch.
+2. Run local validation where the required test database is available:
+
+   ```powershell
+   npm test
+   npm run lint
+   npx tsc --noEmit
+   npm run build
+   ```
+
+3. Apply pending production Prisma migrations through the controlled procedure in Section 10.
+4. Apply hosted Supabase profile synchronization SQL if the Auth/profile integration is new or has not been installed.
+5. Reconcile existing Auth users and require zero missing profiles.
+6. Push the intended commit to the configured GitHub branch.
+7. In Vercel **Deployments**, open the new deployment and confirm:
+   - The source repository, branch, and commit are correct.
+   - Build status is **Ready**.
+   - The production domain points at the intended deployment.
+8. Open the canonical URL in a fresh browser session.
+9. Verify the login/register/recovery paths, authenticated dashboard, Reminders page, and Settings page.
+10. Open Vercel **Logs** and inspect recent requests for HTTP 500s, Prisma errors, Auth callback failures, or email-provider failures.
+11. Trigger the processor workflow manually from GitHub Actions when validating scheduler connectivity.
+
+Record the deployment commit, migration status, profile counts, verification time, and any known limitations in the release note. Do not record secret values, full database URLs, Auth tokens, or user email addresses.
+
+### Minimum smoke test
+
+The shortest meaningful production smoke test is:
+
+```text
+public URL -> login/session -> dashboard -> reminders -> settings -> Vercel logs
+```
+
+The dashboard must render real content, not only an HTML shell. A Vercel **Ready** badge is not sufficient by itself.
