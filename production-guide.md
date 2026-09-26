@@ -225,3 +225,36 @@ npm run profiles:reconcile -- --apply
 The first command is a dry run. Review the sanitized counts and orphaned UUID list. The second command creates missing profiles and updates email/verification metadata while preserving existing timezone and alert-time preferences.
 
 If an emergency repair is performed from the hosted SQL editor instead, backfill only from `auth.users` into `public.user_profiles`, include explicit `created_at` and `updated_at` timestamps, and verify the count of Auth users with email, profile rows, and missing rows afterward. Never print email addresses or secret values in operational logs.
+
+## 10. Apply the production database schema
+
+Run schema deployment from a trusted machine or a dedicated migration job, never from a developer’s default local database by accident.
+
+1. Confirm `DIRECT_URL` targets the intended production Supabase project and uses a direct/session-capable connection.
+2. Export or snapshot production data according to the project’s backup policy.
+3. Check the pending migration list:
+
+   ```powershell
+   npx prisma migrate status
+   ```
+
+4. Apply only the committed migrations:
+
+   ```powershell
+   npx prisma migrate deploy
+   ```
+
+5. Run `npx prisma migrate status` again and require `Database schema is up to date!`.
+6. Apply the hosted profile-sync SQL and reconcile existing Auth users as described above.
+
+The production repair for this project applied these seven migrations in order:
+
+1. `20260819013000_init`
+2. `20260819020000_enforce_settings_singleton`
+3. `20260830213000_refactor_foundation`
+4. `20260831090000_add_reminder_due_at`
+5. `20260831220000_add_email_attempt_notification_id`
+6. `20260831223000_add_gmail_circuit_state`
+7. `20260901190000_allow_multiple_email_attempts`
+
+Do not use `prisma migrate dev` against production. Do not apply `prisma/cutover/` SQL until its dry-run/backfill prerequisites are satisfied and a backup exists.
