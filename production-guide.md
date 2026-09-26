@@ -342,3 +342,25 @@ Find it in Vercel at **Project → Settings → Domains**. The domain page is wh
 After a domain change, update `APP_URL` in Vercel and the matching GitHub Actions secret. Also update Supabase Authentication’s site URL and redirect allow-list. Test the exact canonical URL from a fresh browser session, not only the Vercel deployment URL.
 
 A domain can be attached and the deployment can be marked **Ready** while the application still returns a server error. Domain status validates routing; it does not validate database migrations, Auth profile synchronization, or runtime code paths.
+
+## 15. Configure the notification processor fallback
+
+The repository includes `.github/workflows/process-due-notifications.yml`. The current workflow is manually dispatchable through GitHub Actions and calls:
+
+```text
+POST ${APP_URL}/api/internal/process-due-notifications
+Header: x-scheduler-secret: <SCHEDULER_SECRET>
+```
+
+It requires an HTTP 2xx response and fails the workflow for redirects, authentication errors, or server errors.
+
+Configure the GitHub repository secrets at **GitHub → Hamdaoui-Ali/Remindly → Settings → Secrets and variables → Actions**:
+
+| GitHub Actions secret | Value source |
+| --- | --- |
+| `APP_URL` | Same canonical production origin stored in Vercel, currently `https://remindlly.vercel.app`. |
+| `SCHEDULER_SECRET` | The same random value stored as the Vercel Production `SCHEDULER_SECRET`. |
+
+The local worker runs every 30 seconds through `npm run dev`; GitHub Actions is a fallback for hosted processing. The checked-in workflow currently declares `workflow_dispatch`, so a recurring cron schedule must be added and reviewed separately if automatic GitHub scheduling is desired.
+
+Keep the processor endpoint internal. Do not remove its shared-secret check, and do not place the secret in a URL query string where it could be logged.
