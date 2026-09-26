@@ -437,3 +437,18 @@ The repair sequence was:
 8. Reload the dashboard and smoke-test `/reminders`.
 
 The public dashboard then rendered successfully and Vercel’s current error filter returned zero errors.
+
+## 18. Troubleshooting guide
+
+| Symptom | First place to look | Likely cause | Safe next check |
+| --- | --- | --- | --- |
+| Generic “This page couldn’t load” with an error digest | Vercel **Logs** | Server-side exception during rendering | Read the full runtime error and request path before editing UI code. |
+| Prisma `P2021` / table does not exist | `npx prisma migrate status` against `DIRECT_URL` | Production migrations are pending or the URL points to another database | Confirm project target, then run `npx prisma migrate deploy`. |
+| `Dashboard settings are not configured` after the table exists | `public.user_profiles` counts versus `auth.users` | Existing Auth users were created before profile synchronization | Apply the hosted trigger SQL and run profile reconciliation/backfill. |
+| Vercel says Ready but the browser fails | Deployment **Logs**, not only deployment status | Build succeeded while runtime data/configuration is invalid | Test the canonical domain as an authenticated user and inspect recent 500s. |
+| Auth redirect loops or callback errors | Supabase Auth redirect settings and Vercel `APP_URL` | Site URL/redirect allow-list does not include the current origin | Compare exact scheme, host, and path; then create a fresh Preview/Production deployment. |
+| Email delivery fails but the dashboard loads | Vercel runtime logs and provider dashboard | Missing provider key, unverified sender, quota, or timeout | Confirm provider variables by name and environment, without revealing values. |
+| GitHub processor workflow returns non-2xx | GitHub Actions run output | `APP_URL` or `SCHEDULER_SECRET` mismatch, or endpoint failure | Compare secret names and targets; never print the secret. |
+| Vitest refuses to start | `vitest.config.ts` startup output | Missing `TEST_DATABASE_URL` when `DATABASE_URL` is remote | Use a dedicated database whose name ends in `_test`. |
+
+Do not respond to a database error by deleting tables, resetting migrations, or running `prisma migrate reset` in production. Stop at the evidence-gathering stage, confirm the target database, and take a backup before any destructive operation.
