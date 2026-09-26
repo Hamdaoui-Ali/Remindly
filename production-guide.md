@@ -60,3 +60,25 @@ The production provider accounts are separate responsibilities:
 | Authentication and hosted PostgreSQL | Supabase | `NEXT_PUBLIC_SUPABASE_URL` and database URLs |
 | Email delivery | Resend or Gmail | `EMAIL_PROVIDER` and provider credentials |
 | Scheduled processing fallback | GitHub Actions | `.github/workflows/process-due-notifications.yml` |
+
+## 4. Repository map
+
+The important deployment files are already versioned in the repository:
+
+| Path | Purpose |
+| --- | --- |
+| `package.json` | Scripts, Next.js/React dependencies, Prisma commands, tests, and the production build command. |
+| `src/app/` | Next.js routes and pages, including Auth callbacks and internal processor endpoints. |
+| `src/lib/supabase/` | Browser, server, proxy, and admin Supabase clients. |
+| `src/server/db/client.ts` | Runtime Prisma client using `DATABASE_URL`. |
+| `src/server/profile/` | User profile repository and Auth/profile reconciliation logic. |
+| `prisma/schema.prisma` | Application data model and table mappings. |
+| `prisma/migrations/` | Versioned PostgreSQL schema migrations. |
+| `prisma.config.ts` | Prisma CLI configuration; migrations use `DIRECT_URL`. |
+| `infra/supabase/001-profile-sync.sql` | Hosted-only Auth profile foreign key and synchronization triggers. |
+| `scripts/reconcile-supabase-profiles.ts` | Dry-run/apply profile repair command. |
+| `.github/workflows/process-due-notifications.yml` | Manual GitHub Actions call to the protected notification processor. |
+| `.env.example` | Variable names and safe local placeholders. |
+| `next.config.ts` | Next.js configuration; currently intentionally minimal. |
+
+Do not edit generated files under `src/generated/prisma/` by hand. Regenerate them with the repository script after schema changes.
