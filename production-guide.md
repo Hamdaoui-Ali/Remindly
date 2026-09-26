@@ -201,3 +201,27 @@ The normal application build is defined in `package.json` as `next build`. It do
 The public values can be used by browser and server clients. The secret key must only be available to server-side administrative operations. Vercel environment variables should be added separately for Production and Preview rather than copied into a committed file.
 
 Before connecting Vercel, verify the Supabase project independently by creating a test Auth user and confirming that the Auth dashboard shows the account. Delete test accounts only when that cleanup is explicitly intended.
+
+## 9. Supabase Auth and application profiles
+
+Supabase Auth owns users, sessions, passwords, email verification, and the `auth.users` lifecycle. Remindly owns the matching application profile in `public.user_profiles`, including timezone and default alert time.
+
+Apply `infra/supabase/001-profile-sync.sql` only to the hosted Supabase database. It:
+
+- Adds the `user_profiles.id -> auth.users.id` foreign key with delete cascade.
+- Creates `on_auth_user_created` to insert a default `UTC`/`09:00` profile.
+- Creates `on_auth_user_updated` to synchronize email and verification metadata.
+- Replaces the triggers idempotently when the SQL is rerun.
+
+The file must not be applied to the local Docker database because local PostgreSQL does not contain Supabase’s managed `auth.users` table.
+
+For existing Auth users, run the reconciliation command from a trusted environment with `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and `DATABASE_URL` configured:
+
+```powershell
+npm run profiles:reconcile
+npm run profiles:reconcile -- --apply
+```
+
+The first command is a dry run. Review the sanitized counts and orphaned UUID list. The second command creates missing profiles and updates email/verification metadata while preserving existing timezone and alert-time preferences.
+
+If an emergency repair is performed from the hosted SQL editor instead, backfill only from `auth.users` into `public.user_profiles`, include explicit `created_at` and `updated_at` timestamps, and verify the count of Auth users with email, profile rows, and missing rows afterward. Never print email addresses or secret values in operational logs.
