@@ -27,7 +27,11 @@ vi.mock('@/server/email/configured-delivery', () => ({
 }));
 
 import { GET as getHealth } from '@/app/api/health/route';
-import { POST as processNotifications } from '@/app/api/internal/process-due-notifications/route';
+import {
+  notificationProcessorFailureCode,
+  POST as processNotifications,
+} from '@/app/api/internal/process-due-notifications/route';
+import { z } from 'zod';
 
 const environment = {
   EMAIL_PROVIDER: 'resend' as const,
@@ -74,6 +78,22 @@ describe('GET /api/health', () => {
 });
 
 describe('POST /api/internal/process-due-notifications', () => {
+  it('identifies the invalid environment field without exposing its value', () => {
+    const result = z.object({
+      EMAIL_PROVIDER: z.enum(['resend', 'gmail']),
+    }).safeParse({ EMAIL_PROVIDER: 'private-invalid-value' });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('Expected invalid configuration');
+
+    expect(notificationProcessorFailureCode(result.error)).toBe(
+      'notification_processor_config_EMAIL_PROVIDER',
+    );
+    expect(notificationProcessorFailureCode(new Error('database password'))).toBe(
+      'notification_processor_failed',
+    );
+  });
+
   it.each([null, 'wrong', 'scheduler-secret-123457'])(
     'rejects a missing or incorrect scheduler secret without processing (%s)',
     async (providedSecret) => {
