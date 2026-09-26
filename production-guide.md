@@ -186,3 +186,18 @@ npx prisma db seed
 Use `migrate deploy` for an existing environment. Use `migrate dev` only when intentionally creating or iterating on a development migration. Export or snapshot production data before applying a strict cutover SQL file such as `prisma/cutover/20260831100000_enforce_alert_cutover.sql`.
 
 The normal application build is defined in `package.json` as `next build`. It does not implicitly apply database migrations, so schema rollout is a separate, deliberate deployment step.
+
+## 8. Create and configure the Supabase project
+
+1. Create a Supabase project for Remindly. Record the project URL, publishable key, and server-only secret key in a secure password manager or secret store.
+2. In Supabase Project Settings, open the database connection information and copy two connection strings:
+   - A pooled/runtime connection for `DATABASE_URL`.
+   - A direct or session-pooler connection for `DIRECT_URL`.
+3. Confirm both URLs target the same project and the `public` schema. Do not paste either URL into chat, tickets, source files, or screenshots.
+4. In Supabase Authentication, configure the site URL and redirect URLs for the local origin and the Vercel production origin.
+5. Configure the Auth email provider and any required Send Email Hook. The hook endpoint is the deployed Remindly route documented in the application code; its shared secret is `SUPABASE_SEND_EMAIL_HOOK_SECRET`.
+6. Create or invite the first Auth user. Supabase Auth owns the identity; Remindly stores application preferences in `public.user_profiles` keyed by the Auth user UUID.
+
+The public values can be used by browser and server clients. The secret key must only be available to server-side administrative operations. Vercel environment variables should be added separately for Production and Preview rather than copied into a committed file.
+
+Before connecting Vercel, verify the Supabase project independently by creating a test Auth user and confirming that the Auth dashboard shows the account. Delete test accounts only when that cleanup is explicitly intended.
