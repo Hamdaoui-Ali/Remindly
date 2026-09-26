@@ -452,3 +452,42 @@ The public dashboard then rendered successfully and Vercel’s current error fil
 | Vitest refuses to start | `vitest.config.ts` startup output | Missing `TEST_DATABASE_URL` when `DATABASE_URL` is remote | Use a dedicated database whose name ends in `_test`. |
 
 Do not respond to a database error by deleting tables, resetting migrations, or running `prisma migrate reset` in production. Stop at the evidence-gathering stage, confirm the target database, and take a backup before any destructive operation.
+
+## 19. Provider dashboard map
+
+Use this map when you need to find a setting again:
+
+| Provider | Location | What to verify |
+| --- | --- | --- |
+| Vercel | **Project → Overview** | Production deployment, commit, Ready status, canonical Visit link. |
+| Vercel | **Project → Deployments** | Production/Preview history, branch, commit, build result, deployment URL. |
+| Vercel | **Project → Logs** | Runtime request status, route, host, and server error messages. |
+| Vercel | **Project → Settings → Environment Variables** | Variable names, encrypted values, environment targets, and update timestamps. |
+| Vercel | **Project → Settings → Domains** | Production domain assignment, HTTPS, redirects, and target deployment. |
+| Vercel | **Project → Settings → Build and Deployment** | Framework, root directory, install/build commands, production branch, Node version. |
+| Supabase | **Project Settings → API** | Project URL, publishable key, server secret key. |
+| Supabase | **Database → Connect** | Pooled runtime and direct/session migration connection strings. |
+| Supabase | **Authentication → URL Configuration** | Site URL and redirect allow-list. |
+| Supabase | **Authentication → Users** | Auth accounts that must have matching application profiles. |
+| Supabase | **SQL Editor** | Hosted-only profile trigger SQL and emergency read-only checks. |
+| GitHub | **Repository → Settings → Secrets and variables → Actions** | `APP_URL` and `SCHEDULER_SECRET` for the processor workflow. |
+
+## 20. Release checklist
+
+Before release:
+
+- [ ] The intended Git commit and branch are identified.
+- [ ] Required Vercel variable names exist in the correct environment.
+- [ ] Supabase site URL and redirect URLs match the canonical origin.
+- [ ] `DATABASE_URL` is the pooled/runtime target and `DIRECT_URL` is migration-capable.
+- [ ] A database backup or snapshot exists when the migration policy requires it.
+- [ ] `npx prisma migrate status` has been reviewed.
+- [ ] `npx prisma migrate deploy` has completed when migrations are pending.
+- [ ] Hosted profile synchronization SQL is installed.
+- [ ] Existing Auth users and `public.user_profiles` are reconciled.
+- [ ] Vercel deployment is Ready for the intended commit.
+- [ ] The canonical public URL loads in a fresh browser session.
+- [ ] Login, dashboard, reminders, settings, and the processor path have been smoke-tested.
+- [ ] Recent Vercel logs contain no unexplained 500s.
+
+After release, record the deployment URL, commit, migration result, profile counts, verification timestamp, and any remaining risk. Keep the guide current when a provider setting, variable name, route, migration process, or deployment branch changes.
