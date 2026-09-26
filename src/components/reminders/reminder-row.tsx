@@ -20,12 +20,20 @@ function endDateLabel(endDate: string) {
 }
 
 function scheduledLabel(reminder: ReminderListPresentation) {
-  if (!reminder.scheduledEmail) return 'Email schedule unavailable';
-  if (reminder.scheduledEmail.label) return reminder.scheduledEmail.label;
-  return `Scheduled email ${new Intl.DateTimeFormat('en-US', {
+  const scheduledEmail = reminder.scheduledEmail;
+  if (!scheduledEmail) return 'Email schedule unavailable';
+  const dateLabel = scheduledEmail.label
+    ? scheduledEmail.label.replace(/^Scheduled email\s*/i, '')
+    : new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(new Date(reminder.scheduledEmail.scheduledFor))}`;
+  }).format(new Date(scheduledEmail.scheduledFor));
+
+  if (scheduledEmail.status === 'SENT') return `Email sent ${dateLabel}`;
+  if (scheduledEmail.status === 'PROCESSING') return `Sending email ${dateLabel}`;
+  if (scheduledEmail.status === 'FAILED') return `Email delivery failed ${dateLabel}`;
+  if (scheduledEmail.status === 'CANCELLED') return 'Email not sent';
+  return `Scheduled email ${dateLabel}`;
 }
 
 export function ReminderRow({ onComplete, onEdit, onRenew, reminder }: ReminderRowProps) {

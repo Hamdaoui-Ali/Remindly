@@ -216,17 +216,17 @@ It schedules the protected processor every minute and never embeds either
 secret in Git. Because `pg_net` is asynchronous, inspect its request result
 and the application's `ProcessorRun` heartbeat separately.
 
-The workflow in `.github/workflows/process-due-notifications.yml` is a manual
-fallback. It does not schedule itself; use Supabase Cron for the production
-minute-level trigger. Add these encrypted GitHub repository secrets when the
-manual fallback is needed:
+The workflow in `.github/workflows/process-due-notifications.yml` is an
+automatic five-minute fallback and remains manually dispatchable. It does not
+replace Supabase Cron's production minute-level trigger. Add these encrypted
+GitHub repository secrets for the fallback:
 
 - `APP_URL`: the canonical deployed origin, such as `https://remindly.example.com`
 - `SCHEDULER_SECRET`: the same random value deployed as the application's `SCHEDULER_SECRET`
 
 The workflow captures the response status and explicitly accepts only HTTP 200–299. Redirects, authentication failures, and all other responses fail visibly in Actions. GitHub scheduled workflows are best effort; the processor's due-time query recovers work after delayed or missed triggers.
 
-The local worker attempts due processing every 30 seconds, so Remindly normally submits local reminders within one minute. The GitHub Actions fallback still runs every ten minutes and does not provide the same timing guarantee.
+The local worker attempts due processing every 30 seconds, so Remindly normally submits local reminders within one minute. The GitHub Actions fallback runs every five minutes and does not provide the same timing guarantee.
 
 ## Production environment
 

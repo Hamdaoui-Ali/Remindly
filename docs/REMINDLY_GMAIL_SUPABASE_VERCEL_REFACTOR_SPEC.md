@@ -233,24 +233,22 @@ This subsystem is already substantially more reliable than an in-memory timer-ba
 
 ## 2.5 Current production scheduling defect
 
-The README currently states that the GitHub workflow processes notifications every ten minutes.
+The README states that the GitHub workflow is a notification-processing fallback.
 
-However, the actual workflow:
+The workflow:
 
 ```text
 .github/workflows/process-due-notifications.yml
 ```
 
-contains only:
+previously contained only:
 
 ```yaml
 on:
   workflow_dispatch:
 ```
 
-There is no `schedule:` event.
-
-Therefore, in the uploaded source, GitHub Actions **does not automatically trigger reminder processing**.
+That meant GitHub Actions **did not automatically trigger reminder processing** when Supabase Cron had not yet been configured. The workflow now keeps the manual trigger and adds a best-effort five-minute `schedule:` fallback with a non-overlapping concurrency group.
 
 The local worker masks this issue during development because:
 
@@ -262,7 +260,7 @@ polls the processor repeatedly.
 
 ### Required change
 
-Production scheduling will move to Supabase Cron instead of GitHub Actions.
+Supabase Cron remains the primary minute-level production scheduler. GitHub Actions is an automatic safety fallback for deployments where the Supabase Cron setup is delayed or temporarily unavailable; it must have the same `APP_URL` and `SCHEDULER_SECRET` repository secrets.
 
 ---
 
@@ -3075,7 +3073,7 @@ The refactor is considered deployment-ready only when all criteria below pass.
 - [ ] production uses pooled Supabase DB URL.
 - [ ] migrations use correct non-transaction migration/session connection.
 - [ ] no local worker is required in production.
-- [ ] no GitHub scheduled workflow is required.
+- [ ] GitHub Actions fallback has the production `APP_URL` and `SCHEDULER_SECRET` secrets.
 - [ ] Google OAuth production-readiness requirements, authorized domains, homepage, and privacy policy are verified.
 - [ ] current Gmail, Supabase, and Vercel free-tier assumptions are recorded with review dates.
 
