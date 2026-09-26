@@ -19,10 +19,10 @@ describe('Supabase Cron processor contract', () => {
     expect(sql).not.toMatch(/x-scheduler-secret\s*[:=]\s*['\"][^'\"]+['\"]/);
   });
 
-  it('keeps the GitHub workflow as a manual fallback', async () => {
+  it('keeps the GitHub workflow as an automatic fallback', async () => {
     const workflow = await readFile(workflowPath, 'utf8');
 
     expect(workflow).toContain('workflow_dispatch:');
-    expect(workflow).not.toContain('schedule:');
+    expect(workflow).toContain("- cron: '*/5 * * * *'");
   });
 });
