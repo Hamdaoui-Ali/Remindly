@@ -112,6 +112,48 @@ describe('RemindersPage', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it('blocks a first alert scheduled at the deadline', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Same-day reminder');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-01' } });
+    fireEvent.change(screen.getByLabelText('Minutes before'), { target: { value: '0' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(screen.getByText('The first alert must be before the deadline.')).toBeVisible();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('blocks a custom reminder date equal to the end date', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Deadline-day reminder');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-01' } });
+    await user.selectOptions(screen.getByLabelText('Remind me'), 'custom');
+    fireEvent.change(screen.getByLabelText('Reminder date'), { target: { value: '2026-12-01' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(screen.getByText('Reminder date must be before the end date.')).toBeVisible();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('marks the unsupported same-day option as unavailable', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+
+    expect(screen.getByRole('option', { name: 'Same day' })).toBeDisabled();
+  });
+
   it('reveals an exact reminder date when Custom is selected', async () => {
     const user = userEvent.setup();
     render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
@@ -281,6 +323,26 @@ describe('RemindersPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not save/i);
     expect(screen.getByLabelText('Name')).toHaveValue('Keep this value');
     expect(screen.getByLabelText('End date')).toHaveValue('2026-12-01');
+  });
+
+  it('shows server validation details for fields outside the basic form fields', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: 'Invalid reminder input',
+        fields: { alerts: ['The alert schedule is invalid.'] },
+      }),
+    }));
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Server validation');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-01' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(await screen.findByText('The alert schedule is invalid.')).toBeVisible();
   });
 
   it('warns about a past alert date without blocking submission', async () => {

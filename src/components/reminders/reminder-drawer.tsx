@@ -46,16 +46,17 @@ type FormAlert = {
 };
 
 const CUSTOM_LEAD_DAYS = 'custom';
-const PRESET_LEAD_DAYS = new Set(['0', '1', '3', '7', '14', '30']);
+const PRESET_LEAD_DAYS = new Set(['1', '3', '7', '14', '30']);
+const FORM_FIELD_NAMES = new Set(['name', 'endDate', 'leadDays', 'customAlertDate', 'alertTime']);
 
 const LEAD_OPTIONS = [
-  ['0', 'Same day'],
-  ['1', '1 day before'],
-  ['3', '3 days before'],
-  ['7', '7 days before'],
-  ['14', '14 days before'],
-  ['30', '30 days before'],
-  [CUSTOM_LEAD_DAYS, 'Custom date and time'],
+  ['0', 'Same day', true],
+  ['1', '1 day before', false],
+  ['3', '3 days before', false],
+  ['7', '7 days before', false],
+  ['14', '14 days before', false],
+  ['30', '30 days before', false],
+  [CUSTOM_LEAD_DAYS, 'Custom date and time', false],
 ] as const;
 
 function selectedLeadDays(values: FormValues): number {
@@ -109,15 +110,29 @@ function validates(values: FormValues) {
       errors.customAlertDate = 'Choose a reminder date.';
     } else if (values.endDate) {
       try {
-        calculateLeadDays(values.endDate, values.customAlertDate);
+        if (calculateLeadDays(values.endDate, values.customAlertDate) === 0) {
+          errors.customAlertDate = 'Reminder date must be before the end date.';
+        }
       } catch {
         errors.customAlertDate = 'Reminder date must be on or before the end date.';
       }
     }
   }
+  const firstLeadDays = selectedLeadDaysForDisplay(values);
   values.alerts.forEach((alert, index) => {
-    if (alert.kind === 'offset' && (!Number.isInteger(Number(alert.offsetMinutes)) || Number(alert.offsetMinutes) <= 0)) {
-      errors[`alert-${index}` as keyof FormValues] = 'Enter a positive alert offset.';
+    if (alert.kind === 'offset') {
+      const offsetMinutes = index === 0
+        ? firstLeadDays === null ? null : firstLeadDays * 24 * 60
+        : Number(alert.offsetMinutes);
+      if (offsetMinutes !== null && (!Number.isInteger(offsetMinutes) || offsetMinutes <= 0)) {
+        if (index === 0 && values.leadDays === CUSTOM_LEAD_DAYS) {
+          errors.customAlertDate = 'Reminder date must be before the end date.';
+        } else if (index === 0) {
+          errors.leadDays = 'The first alert must be before the deadline.';
+        } else {
+          errors[`alert-${index}` as keyof FormValues] = 'Enter a positive alert offset.';
+        }
+      }
     }
     if (alert.kind === 'absolute' && !alert.scheduledFor) {
       errors[`alert-${index}` as keyof FormValues] = 'Choose an absolute alert time.';
@@ -209,12 +224,16 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
       }
     } catch (error) {
       if (error instanceof ReminderRequestError && error.status === 400 && error.fields) {
-        setErrors({
-          name: error.fields.name?.[0],
-          endDate: error.fields.endDate?.[0],
-          leadDays: error.fields.leadDays?.[0],
-          alertTime: error.fields.alertTime?.[0],
-        });
+        const nextErrors: Partial<Record<keyof FormValues, string>> = {};
+        for (const field of FORM_FIELD_NAMES) {
+          nextErrors[field as keyof FormValues] = error.fields[field]?.[0];
+        }
+        const unmappedMessage = Object.entries(error.fields)
+          .filter(([field]) => !FORM_FIELD_NAMES.has(field))
+          .flatMap(([, messages]) => messages ?? [])
+          .find(Boolean);
+        setErrors(nextErrors);
+        setRequestError(unmappedMessage ?? null);
       } else {
         setRequestError('We could not save this reminder. Your values are still here—please try again.');
       }
@@ -244,7 +263,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
         </Field>
         <Field htmlFor="reminder-lead-days" label="Remind me" error={errors.leadDays}>
           <Select name="leadDays" value={values.leadDays} onChange={(event) => update('leadDays', event.target.value)}>
-            {LEAD_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {LEAD_OPTIONS.map(([value, label, disabled]) => <option key={value} value={value} disabled={disabled}>{label}</option>)}
           </Select>
         </Field>
         {values.leadDays === CUSTOM_LEAD_DAYS ? (
