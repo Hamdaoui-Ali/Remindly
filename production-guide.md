@@ -277,3 +277,31 @@ The project is visible at `https://vercel.com/hamdaoui-ali/remindly`. The dashbo
 For normal Git-connected operation, pushing to `main` creates or updates the production deployment. Pull requests and non-production branches create Preview deployments when enabled by the project settings.
 
 Do not use a Vercel deployment URL as the canonical application URL. Keep `APP_URL` aligned with the production domain configured under the project’s Domains settings.
+
+## 12. Add variables in Vercel
+
+In the Vercel project:
+
+1. Open **Settings**.
+2. Open **Environment Variables**.
+3. Select **Project** variables.
+4. Click **Add Environment Variable**.
+5. Enter the exact variable name from `.env.example`.
+6. Paste the value from the appropriate provider’s secure settings page.
+7. Select the target environment: **Production**, **Preview**, **Development**, or a deliberate combination.
+8. Save the variable, then redeploy any deployment that must receive the new value.
+
+Use this target matrix as the baseline:
+
+| Vercel variable group | Production | Preview | Source |
+| --- | --- | --- | --- |
+| `DATABASE_URL`, `DIRECT_URL` | Required | Required if Preview uses a database | Supabase connection settings |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Required | Required | Supabase project API settings |
+| `SUPABASE_SECRET_KEY`, `SUPABASE_SEND_EMAIL_HOOK_SECRET` | Required | Only if Preview exercises admin/Auth-hook paths | Supabase/API or generated secret |
+| `APP_URL` | `https://remindlly.vercel.app` | Preview URL or a test origin | Vercel domain/deployment URL |
+| `SCHEDULER_SECRET` | Required | Usually not needed | Generated random secret; also GitHub secret |
+| `EMAIL_PROVIDER` and provider credentials | Required for mail | Use a safe test provider or controlled Preview values | Resend/Gmail settings |
+
+Vercel shows secret values as encrypted/hidden after saving. Use the variable name, environment target, and **Last Updated** metadata for audits; do not reveal values just to verify that a variable exists. If a variable is changed, create a new deployment or redeploy the affected deployment because existing serverless instances keep the environment they were built with.
+
+Do not put `TEST_DATABASE_URL` in Production. Keep test databases isolated and named with a `_test` suffix.
