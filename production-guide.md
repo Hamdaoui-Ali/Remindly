@@ -31,3 +31,32 @@ The repository uses three environments:
 - Put public Supabase values in the browser only when the variable name begins with `NEXT_PUBLIC_`.
 - Keep `SUPABASE_SECRET_KEY`, `DATABASE_URL`, `DIRECT_URL`, mail credentials, and `SCHEDULER_SECRET` server-side.
 - The values shown below are names, examples, or roles only. They are not production secrets.
+
+## 3. Prerequisites
+
+Install the following before working with the project:
+
+- Node.js `^20.19`, `^22.12`, or `>=24.0.0`.
+- npm.
+- Docker Desktop with Docker Compose, or another PostgreSQL 16-compatible database for local work.
+- A GitHub account with access to `Hamdaoui-Ali/Remindly`.
+- A Supabase project for Auth and PostgreSQL.
+- A Vercel account with access to the `hamdaoui-ali` team/project.
+
+The required Node versions come from the Prisma 7 requirement recorded in `README.md`. Confirm the installed version before setup:
+
+```powershell
+node --version
+npm --version
+docker --version
+```
+
+The production provider accounts are separate responsibilities:
+
+| Responsibility | Provider | Repository/config reference |
+| --- | --- | --- |
+| Source control and production branch | GitHub | `Hamdaoui-Ali/Remindly`, branch `main` |
+| Application hosting and domains | Vercel | Project `hamdaoui-ali/remindly` |
+| Authentication and hosted PostgreSQL | Supabase | `NEXT_PUBLIC_SUPABASE_URL` and database URLs |
+| Email delivery | Resend or Gmail | `EMAIL_PROVIDER` and provider credentials |
+| Scheduled processing fallback | GitHub Actions | `.github/workflows/process-due-notifications.yml` |
