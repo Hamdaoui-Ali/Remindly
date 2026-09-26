@@ -18,6 +18,7 @@ type FixtureOverrides = Partial<{
   remainingCalendarDays: number;
   scheduledFor: string;
   scheduledLabel: string;
+  notificationStatus: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED' | 'CANCELLED';
   leadDays: number;
   alertTime: string;
 }>;
@@ -39,7 +40,7 @@ function reminder(overrides: FixtureOverrides = {}) {
     scheduledEmail: {
       id: `notification-${id}`,
       scheduledFor: overrides.scheduledFor ?? '2026-08-11T08:00:00.000Z',
-      status: 'PENDING' as const,
+      status: overrides.notificationStatus ?? 'PENDING',
       channel: 'EMAIL' as const,
       label: overrides.scheduledLabel ?? 'Scheduled email Aug 11, 2026, 9:00 AM',
     },
@@ -75,6 +76,19 @@ describe('RemindersPage', () => {
     expect(within(passportRow!).getByText(/Aug 18, 2026/)).toBeVisible();
     expect(within(passportRow!).getByText('1 day overdue')).toBeVisible();
     expect(within(passportRow!).getByText(/scheduled email/i)).toBeVisible();
+  });
+
+  it.each([
+    ['PROCESSING', /sending email/i],
+    ['SENT', /email sent/i],
+    ['FAILED', /email delivery failed/i],
+    ['CANCELLED', /email not sent/i],
+  ] as const)('shows the %s notification state in the reminder row', (notificationStatus, expectedLabel) => {
+    render(<RemindersPage reminders={[reminder({ notificationStatus })]} defaultAlertTime="09:00" />);
+
+    const row = screen.getByText('Passport renewal').closest('article');
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText(expectedLabel)).toBeVisible();
   });
 
   it('uses one Add reminder action for an empty state', () => {
