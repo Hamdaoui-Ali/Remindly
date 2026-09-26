@@ -137,3 +137,27 @@ The database and Supabase variables are:
 | `OWNER_EMAIL` | Legacy local seed compatibility value. | Sensitive | Keep local unless an explicitly supported seed flow requires it. |
 
 For Supabase connection strings, use the pooler for normal application traffic and a direct/session connection for Prisma migrations. Transaction pooler port `6543` is for runtime traffic; use a direct connection or session pooler port `5432` for migrations when the Supabase network configuration requires it.
+
+The scheduler, application URL, and email variables are:
+
+| Variable | Purpose | Secret? |
+| --- | --- | --- |
+| `SCHEDULER_SECRET` | Authorizes `POST /api/internal/process-due-notifications`. | Yes |
+| `APP_URL` | Canonical origin used by jobs and links, for example `https://remindlly.vercel.app`. | No, but must be correct |
+| `EMAIL_PROVIDER` | Selects `resend` or `gmail`. | No |
+| `RESEND_API_KEY` | API credential for the Resend notification path. | Yes |
+| `RESEND_FROM` | Verified sender identity for Resend, such as `Remindly <reminders@example.com>`. | No, but provider-validated |
+| `GMAIL_CLIENT_ID` | Google OAuth client identifier when Gmail delivery is enabled. | No |
+| `GMAIL_CLIENT_SECRET` | Google OAuth client secret. | Yes |
+| `GMAIL_REFRESH_TOKEN` | Offline Gmail OAuth refresh token. | Yes |
+| `GMAIL_SENDER_EMAIL` | Gmail sender address. | No |
+| `GMAIL_SENDER_NAME` | Display name for Gmail messages. | No |
+| `GMAIL_TOTAL_DAILY_BUDGET` | Total Gmail delivery budget; the example is `350`. | No |
+| `GMAIL_AUTH_RESERVE` | Reserved Gmail capacity for Auth mail; the example is `50`. | No |
+| `GMAIL_REQUEST_TIMEOUT_MS` | Gmail request timeout; the example is `10000`. | No |
+| `GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS` | Total Auth hook timeout; the example is `4000`. | No |
+| `TEST_DATABASE_URL` | Dedicated test database URL ending in `_test`. | Yes |
+
+`EMAIL_PROVIDER=gmail` requires the four Gmail credential/address variables. Keep Gmail budget values below provider limits and preserve the Auth reserve. The test database variable is for Vitest/CI, not the Vercel runtime.
+
+Older local `.env` files may still contain `AUTH_SECRET`, `NEXTAUTH_URL`, or `OWNER_PASSWORD_HASH` from an earlier auth implementation. The current production path is Supabase Auth; do not copy legacy values into Vercel unless a current code path explicitly requires them.
