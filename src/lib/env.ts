@@ -16,8 +16,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   SCHEDULER_SECRET: z.string().min(16),
   SUPABASE_SEND_EMAIL_HOOK_SECRET: z.string().min(1).optional(),
-  RESEND_API_KEY: z.string().min(1),
-  RESEND_FROM: z.string().min(1),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_FROM: z.string().min(1).optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'gmail']).default('resend'),
   GMAIL_CLIENT_ID: z.string().min(1).optional(),
   GMAIL_CLIENT_SECRET: z.string().min(1).optional(),
@@ -31,7 +31,12 @@ const envSchema = z.object({
   APP_URL: z.string().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 }).superRefine((value, context) => {
-  if (value.EMAIL_PROVIDER !== 'gmail') return;
+  if (value.EMAIL_PROVIDER === 'resend') {
+    for (const key of ['RESEND_API_KEY', 'RESEND_FROM'] as const) {
+      if (!value[key]) context.addIssue({ code: 'custom', path: [key], message: `${key} is required when EMAIL_PROVIDER=resend` });
+    }
+    return;
+  }
   for (const key of ['GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN', 'GMAIL_SENDER_EMAIL'] as const) {
     if (!value[key]) context.addIssue({ code: 'custom', path: [key], message: `${key} is required when EMAIL_PROVIDER=gmail` });
   }

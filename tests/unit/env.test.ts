@@ -39,4 +39,32 @@ describe('parseServerEnv', () => {
       NODE_ENV: 'test',
     })).toThrow('GMAIL_CLIENT_ID');
   });
+
+  it('accepts Gmail configuration without unused Resend credentials', () => {
+    const env = parseServerEnv({
+      DATABASE_URL: 'postgresql://pooler.example/remindly',
+      SCHEDULER_SECRET: 's'.repeat(16),
+      EMAIL_PROVIDER: 'gmail',
+      GMAIL_CLIENT_ID: 'gmail-client-id',
+      GMAIL_CLIENT_SECRET: 'gmail-client-secret',
+      GMAIL_REFRESH_TOKEN: 'gmail-refresh-token',
+      GMAIL_SENDER_EMAIL: 'notifications@example.com',
+      APP_URL: 'http://localhost:3000',
+      NODE_ENV: 'test',
+    });
+
+    expect(env.EMAIL_PROVIDER).toBe('gmail');
+    expect(env.RESEND_API_KEY).toBeUndefined();
+    expect(env.RESEND_FROM).toBeUndefined();
+  });
+
+  it('requires Resend credentials when Resend is selected', () => {
+    expect(() => parseServerEnv({
+      DATABASE_URL: 'postgresql://pooler.example/remindly',
+      SCHEDULER_SECRET: 's'.repeat(16),
+      EMAIL_PROVIDER: 'resend',
+      APP_URL: 'http://localhost:3000',
+      NODE_ENV: 'test',
+    })).toThrow('RESEND_API_KEY');
+  });
 });

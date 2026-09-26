@@ -11,25 +11,28 @@ export interface EmailProviderConfig {
   gmailSenderEmail?: string;
   gmailSenderName: string;
   gmailRequestTimeoutMs: number;
-  resendApiKey: string;
-  resendFrom: string;
+  resendApiKey?: string;
+  resendFrom?: string;
 }
 
-function required(value: string | undefined, name: string): string {
-  if (!value) throw new Error(`${name} is required for Gmail delivery`);
+function required(value: string | undefined, name: string, provider: 'Gmail' | 'Resend'): string {
+  if (!value) throw new Error(`${name} is required for ${provider} delivery`);
   return value;
 }
 
 export function createEmailProvider(config: EmailProviderConfig): EmailProvider {
   if (config.emailProvider === 'resend') {
-    return new ResendEmailProvider({ apiKey: config.resendApiKey, from: config.resendFrom });
+    return new ResendEmailProvider({
+      apiKey: required(config.resendApiKey, 'RESEND_API_KEY', 'Resend'),
+      from: required(config.resendFrom, 'RESEND_FROM', 'Resend'),
+    });
   }
   return new GmailEmailProvider({
-    from: `${config.gmailSenderName} <${required(config.gmailSenderEmail, 'GMAIL_SENDER_EMAIL')}>`,
+    from: `${config.gmailSenderName} <${required(config.gmailSenderEmail, 'GMAIL_SENDER_EMAIL', 'Gmail')}>`,
     oauth: new GmailOAuthClient({
-      clientId: required(config.gmailClientId, 'GMAIL_CLIENT_ID'),
-      clientSecret: required(config.gmailClientSecret, 'GMAIL_CLIENT_SECRET'),
-      refreshToken: required(config.gmailRefreshToken, 'GMAIL_REFRESH_TOKEN'),
+      clientId: required(config.gmailClientId, 'GMAIL_CLIENT_ID', 'Gmail'),
+      clientSecret: required(config.gmailClientSecret, 'GMAIL_CLIENT_SECRET', 'Gmail'),
+      refreshToken: required(config.gmailRefreshToken, 'GMAIL_REFRESH_TOKEN', 'Gmail'),
     }),
     requestTimeoutMs: config.gmailRequestTimeoutMs,
   });
