@@ -14,21 +14,9 @@ describe('parseServerEnv', () => {
     })).toThrow('SCHEDULER_SECRET');
   });
 
-  it('rejects a missing direct migration URL', () => {
-    expect(() => parseServerEnv({
-      DATABASE_URL: 'postgresql://localhost/remindly',
-      SCHEDULER_SECRET: 's'.repeat(16),
-      RESEND_API_KEY: 're_test',
-      RESEND_FROM: 'Remindly <notifications@example.com>',
-      APP_URL: 'http://localhost:3000',
-      NODE_ENV: 'test',
-    })).toThrow('DIRECT_URL');
-  });
-
-  it('accepts separate runtime and migration URLs', () => {
+  it('accepts runtime configuration without the migration-only direct URL', () => {
     const env = parseServerEnv({
-      DATABASE_URL: 'postgresql://pooler.example/remindly',
-      DIRECT_URL: 'postgresql://direct.example/remindly',
+      DATABASE_URL: 'postgresql://localhost/remindly',
       SCHEDULER_SECRET: 's'.repeat(16),
       RESEND_API_KEY: 're_test',
       RESEND_FROM: 'Remindly <notifications@example.com>',
@@ -36,8 +24,7 @@ describe('parseServerEnv', () => {
       NODE_ENV: 'test',
     });
 
-    expect(env.DATABASE_URL).toBe('postgresql://pooler.example/remindly');
-    expect(env.DIRECT_URL).toBe('postgresql://direct.example/remindly');
+    expect(env.DATABASE_URL).toBe('postgresql://localhost/remindly');
   });
 
   it('requires complete Gmail configuration when Gmail is selected', () => {

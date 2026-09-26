@@ -14,7 +14,6 @@ const appUrlSchema = z.string().url();
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  DIRECT_URL: z.string().min(1),
   SCHEDULER_SECRET: z.string().min(16),
   SUPABASE_SEND_EMAIL_HOOK_SECRET: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1),
