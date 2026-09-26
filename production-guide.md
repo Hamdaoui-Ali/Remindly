@@ -161,3 +161,28 @@ The scheduler, application URL, and email variables are:
 `EMAIL_PROVIDER=gmail` requires the four Gmail credential/address variables. Keep Gmail budget values below provider limits and preserve the Auth reserve. The test database variable is for Vitest/CI, not the Vercel runtime.
 
 Older local `.env` files may still contain `AUTH_SECRET`, `NEXTAUTH_URL`, or `OWNER_PASSWORD_HASH` from an earlier auth implementation. The current production path is Supabase Auth; do not copy legacy values into Vercel unless a current code path explicitly requires them.
+
+## 7. Prisma and PostgreSQL configuration
+
+The runtime and CLI intentionally use different connection variables:
+
+- `src/server/db/client.ts` creates the Prisma client from `DATABASE_URL`.
+- `prisma.config.ts` points Prisma CLI migrations at `DIRECT_URL`.
+- `prisma/schema.prisma` maps application models to the `public` schema.
+- `prisma/migrations/` is the authoritative ordered schema history.
+
+This split matters for Supabase because pooled runtime connections and migration-capable direct/session connections have different connection behavior. Never replace `DIRECT_URL` with an arbitrary URL just because it reaches the same project; confirm that the connection supports DDL and prepared statements.
+
+Useful local commands:
+
+```powershell
+npx prisma validate
+npm run db:generate
+npx prisma migrate status
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+Use `migrate deploy` for an existing environment. Use `migrate dev` only when intentionally creating or iterating on a development migration. Export or snapshot production data before applying a strict cutover SQL file such as `prisma/cutover/20260831100000_enforce_alert_cutover.sql`.
+
+The normal application build is defined in `package.json` as `next build`. It does not implicitly apply database migrations, so schema rollout is a separate, deliberate deployment step.
