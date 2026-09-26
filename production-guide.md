@@ -82,3 +82,40 @@ The important deployment files are already versioned in the repository:
 | `next.config.ts` | Next.js configuration; currently intentionally minimal. |
 
 Do not edit generated files under `src/generated/prisma/` by hand. Regenerate them with the repository script after schema changes.
+
+## 5. Bootstrap the project locally
+
+From a clean clone:
+
+```powershell
+git clone https://github.com/Hamdaoui-Ali/Remindly.git
+Set-Location .\Remindly
+npm install
+Copy-Item .env.example .env
+```
+
+Review every placeholder in `.env` before starting the application. Local development uses the PostgreSQL service declared in `docker-compose.yml`:
+
+```powershell
+docker compose up -d postgres
+docker compose ps
+```
+
+The compose file maps host port `5433` to PostgreSQL’s container port `5432`, uses database/user/password `remindly`, and stores data in the named Docker volume `remindly-postgres-data`.
+
+Generate the Prisma client, apply the versioned schema, and seed the legacy singleton settings row:
+
+```powershell
+npx prisma validate
+npm run db:generate
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+Start the web server and local notification worker together:
+
+```powershell
+npm run dev
+```
+
+Open `http://localhost:3000/login`. Supabase Auth owns registration, sessions, password recovery, email verification, and Auth callbacks. Use `npm run dev:web` only when the local notification worker should be omitted.
