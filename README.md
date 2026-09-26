@@ -226,7 +226,7 @@ manual fallback is needed:
 
 The workflow captures the response status and explicitly accepts only HTTP 200–299. Redirects, authentication failures, and all other responses fail visibly in Actions. GitHub scheduled workflows are best effort; the processor's due-time query recovers work after delayed or missed triggers.
 
-The local worker attempts due processing every 30 seconds, so Remindly normally submits local reminders within one minute. The GitHub Actions fallback still runs every ten minutes and does not provide the same timing guarantee.
+The local worker attempts due processing every 30 seconds, so Remindly normally submits local reminders within one minute. The GitHub Actions fallback runs every five minutes and does not provide the same timing guarantee.
 
 ## Production environment
 
