@@ -11,5 +11,7 @@ describe('notification processor workflow', () => {
 
     expect(workflow).toContain('workflow_dispatch:');
     expect(workflow).toContain("- cron: '*/5 * * * *'");
+    expect(workflow).toContain('APP_URL: https://remindlly.vercel.app');
+    expect(workflow).not.toContain('APP_URL: ${{ secrets.APP_URL }}');
   });
 });
