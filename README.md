@@ -216,10 +216,10 @@ It schedules the protected processor every minute and never embeds either
 secret in Git. Because `pg_net` is asynchronous, inspect its request result
 and the application's `ProcessorRun` heartbeat separately.
 
-The workflow in `.github/workflows/process-due-notifications.yml` is a manual
-fallback. It does not schedule itself; use Supabase Cron for the production
-minute-level trigger. Add these encrypted GitHub repository secrets when the
-manual fallback is needed:
+The workflow in `.github/workflows/process-due-notifications.yml` is an
+automatic five-minute fallback and remains manually dispatchable. It does not
+replace Supabase Cron's production minute-level trigger. Add these encrypted
+GitHub repository secrets for the fallback:
 
 - `APP_URL`: the canonical deployed origin, such as `https://remindly.example.com`
 - `SCHEDULER_SECRET`: the same random value deployed as the application's `SCHEDULER_SECRET`
