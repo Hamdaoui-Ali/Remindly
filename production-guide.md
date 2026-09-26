@@ -258,3 +258,22 @@ The production repair for this project applied these seven migrations in order:
 7. `20260901190000_allow_multiple_email_attempts`
 
 Do not use `prisma migrate dev` against production. Do not apply `prisma/cutover/` SQL until its dry-run/backfill prerequisites are satisfied and a backup exists.
+
+## 11. Connect GitHub to Vercel
+
+The production deployment was connected to the GitHub repository rather than uploaded manually:
+
+1. Sign in to Vercel and select the `hamdaoui-ali` team.
+2. Choose **Add New... → Project**.
+3. Import `Hamdaoui-Ali/Remindly` from GitHub.
+4. Keep the repository root as the project root; this is not a monorepo deployment.
+5. Let Vercel detect the Next.js framework.
+6. Set the production branch to `main`.
+7. Add the environment variables before the first production deployment.
+8. Deploy, then open the deployment’s **Visit** link.
+
+The project is visible at `https://vercel.com/hamdaoui-ali/remindly`. The dashboard’s **Overview** page shows the production deployment, its Git commit, its domain, and its current Ready/Error status. The **Deployments** page lists preview and production deployments; the **Logs** page exposes runtime request logs.
+
+For normal Git-connected operation, pushing to `main` creates or updates the production deployment. Pull requests and non-production branches create Preview deployments when enabled by the project settings.
+
+Do not use a Vercel deployment URL as the canonical application URL. Keep `APP_URL` aligned with the production domain configured under the project’s Domains settings.
