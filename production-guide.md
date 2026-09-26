@@ -119,3 +119,21 @@ npm run dev
 ```
 
 Open `http://localhost:3000/login`. Supabase Auth owns registration, sessions, password recovery, email verification, and Auth callbacks. Use `npm run dev:web` only when the local notification worker should be omitted.
+
+## 6. Local environment file
+
+`.env.example` is the source of truth for variable names. Copy it to `.env` for local work, then replace placeholders. The file is ignored by Git and must stay local.
+
+The database and Supabase variables are:
+
+| Variable | Local role | Secret? | Production source |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Runtime PostgreSQL connection. Local example points to `localhost:5433`. | Yes | Supabase pooled/runtime connection, stored in Vercel Production variables. |
+| `DIRECT_URL` | Prisma CLI migration connection. Local example points directly to local PostgreSQL. | Yes | Supabase direct or session-pooler connection, stored in Vercel Production variables. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL used by browser/server clients. | No | Supabase project dashboard, then Vercel Production/Preview as needed. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase publishable key. | No | Supabase project API settings, then Vercel. |
+| `SUPABASE_SECRET_KEY` | Server-only Supabase Admin API key used by reconciliation/admin operations. | Yes | Supabase project API settings, then Vercel Production only. |
+| `SUPABASE_SEND_EMAIL_HOOK_SECRET` | Shared secret for the Supabase Send Email Hook endpoint. | Yes | Generate/store in Vercel and configure the matching Supabase hook. |
+| `OWNER_EMAIL` | Legacy local seed compatibility value. | Sensitive | Keep local unless an explicitly supported seed flow requires it. |
+
+For Supabase connection strings, use the pooler for normal application traffic and a direct/session connection for Prisma migrations. Transaction pooler port `6543` is for runtime traffic; use a direct connection or session pooler port `5432` for migrations when the Supabase network configuration requires it.
