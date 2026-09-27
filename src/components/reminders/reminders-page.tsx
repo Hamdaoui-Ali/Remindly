@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { reminderRequest } from '@/app/(protected)/reminders/actions';
@@ -19,17 +19,37 @@ const GROUPS = [
   ['SAFE', 'Safe'],
 ] as const;
 
-export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC' }: {
+const STATUS_REFRESH_INTERVAL_MILLISECONDS = 30_000;
+
+export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', now }: {
   reminders: ReminderListPresentation[];
   defaultAlertTime: string;
   timezone?: string;
+  now?: string;
 }) {
   const router = useRouter();
+  const refresh = router.refresh;
   const [items, setItems] = useState(reminders);
+  const [previousReminders, setPreviousReminders] = useState(reminders);
+  const [currentTime, setCurrentTime] = useState<number | null>(() => now ? new Date(now).getTime() : null);
   const [drawer, setDrawer] = useState<{ mode: DrawerMode; reminder: ReminderListPresentation | null } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const addTriggerRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  if (reminders !== previousReminders) {
+    setPreviousReminders(reminders);
+    setItems(reminders);
+  }
+
+  useEffect(() => {
+    if (!now) return;
+    const timer = window.setInterval(() => {
+      setCurrentTime(Date.now());
+      refresh();
+    }, STATUS_REFRESH_INTERVAL_MILLISECONDS);
+    return () => window.clearInterval(timer);
+  }, [now, refresh]);
 
   const openDrawer = (mode: DrawerMode, reminder: ReminderListPresentation | null, returnFocus: HTMLElement | null) => {
     returnFocusRef.current = returnFocus;
@@ -98,6 +118,7 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC' }:
                 urgency={urgency}
                 label={label}
                 reminders={grouped}
+                now={currentTime}
                 onComplete={complete}
                 onEdit={(reminder, returnFocus) => openDrawer('edit', reminder, returnFocus)}
                 onRenew={(reminder, returnFocus) => openDrawer('renew', reminder, returnFocus)}

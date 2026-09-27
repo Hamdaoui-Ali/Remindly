@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -89,6 +89,75 @@ describe('RemindersPage', () => {
     const row = screen.getByText('Passport renewal').closest('article');
     expect(row).not.toBeNull();
     expect(within(row!).getByText(expectedLabel)).toBeVisible();
+  });
+
+  it('shows a past-due pending notification as overdue and not sent', () => {
+    render(
+      <RemindersPage
+        reminders={[reminder({
+          notificationStatus: 'PENDING',
+          scheduledFor: '2026-09-27T11:57:00.000Z',
+          scheduledLabel: 'Scheduled email Sep 27, 2026, 11:57 AM',
+        })]}
+        defaultAlertTime="09:00"
+        now="2026-09-27T11:58:00.000Z"
+      />,
+    );
+
+    const row = screen.getByText('Passport renewal').closest('article');
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText(/email overdue.*not sent yet/i)).toBeVisible();
+    expect(within(row!).queryByText(/^scheduled email/i)).not.toBeInTheDocument();
+  });
+
+  it('updates a pending notification when its scheduled time passes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-09-27T11:56:00.000Z');
+    try {
+      render(
+        <RemindersPage
+          reminders={[reminder({
+            notificationStatus: 'PENDING',
+            scheduledFor: '2026-09-27T11:57:00.000Z',
+            scheduledLabel: 'Scheduled email Sep 27, 2026, 11:57 AM',
+          })]}
+          defaultAlertTime="09:00"
+          now="2026-09-27T11:56:00.000Z"
+        />,
+      );
+
+      expect(screen.getByText(/^scheduled email/i)).toBeVisible();
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+      expect(screen.getByText(/email overdue.*not sent yet/i)).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows a processor status received during a server refresh', () => {
+    const pending = reminder({
+      notificationStatus: 'PENDING',
+      scheduledFor: '2026-09-27T11:57:00.000Z',
+      scheduledLabel: 'Scheduled email Sep 27, 2026, 11:57 AM',
+    });
+    const view = render(
+      <RemindersPage
+        reminders={[pending]}
+        defaultAlertTime="09:00"
+        now="2026-09-27T11:58:00.000Z"
+      />,
+    );
+    expect(screen.getByText(/email overdue.*not sent yet/i)).toBeVisible();
+
+    view.rerender(
+      <RemindersPage
+        reminders={[{ ...pending, scheduledEmail: { ...pending.scheduledEmail, status: 'SENT' as const } }]}
+        defaultAlertTime="09:00"
+        now="2026-09-27T11:58:30.000Z"
+      />,
+    );
+
+    expect(screen.getByText(/^email sent/i)).toBeVisible();
   });
 
   it('uses one Add reminder action for an empty state', () => {

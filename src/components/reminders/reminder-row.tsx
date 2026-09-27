@@ -10,6 +10,7 @@ type ReminderRowProps = {
   onEdit: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
   onRenew: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
   reminder: ReminderListPresentation;
+  now: number | null;
 };
 
 function endDateLabel(endDate: string) {
@@ -19,7 +20,7 @@ function endDateLabel(endDate: string) {
   }).format(new Date(`${endDate}T00:00:00.000Z`));
 }
 
-function scheduledLabel(reminder: ReminderListPresentation) {
+function scheduledLabel(reminder: ReminderListPresentation, now: number | null) {
   const scheduledEmail = reminder.scheduledEmail;
   if (!scheduledEmail) return 'Email schedule unavailable';
   const dateLabel = scheduledEmail.label
@@ -33,10 +34,13 @@ function scheduledLabel(reminder: ReminderListPresentation) {
   if (scheduledEmail.status === 'PROCESSING') return `Sending email ${dateLabel}`;
   if (scheduledEmail.status === 'FAILED') return `Email delivery failed ${dateLabel}`;
   if (scheduledEmail.status === 'CANCELLED') return 'Email not sent';
+  if (now !== null && new Date(scheduledEmail.scheduledFor).getTime() <= now) {
+    return `Email overdue — not sent yet (scheduled ${dateLabel})`;
+  }
   return `Scheduled email ${dateLabel}`;
 }
 
-export function ReminderRow({ onComplete, onEdit, onRenew, reminder }: ReminderRowProps) {
+export function ReminderRow({ now, onComplete, onEdit, onRenew, reminder }: ReminderRowProps) {
   const rowRef = useRef<HTMLElement>(null);
   const returnFocus = () => rowRef.current?.querySelector<HTMLElement>('button[aria-haspopup="dialog"]') ?? null;
 
@@ -59,7 +63,7 @@ export function ReminderRow({ onComplete, onEdit, onRenew, reminder }: ReminderR
       </div>
       <div className="reminder-row__field reminder-row__email">
         <span className="reminder-row__mobile-label">Email alert</span>
-        <span>{scheduledLabel(reminder)}</span>
+        <span>{scheduledLabel(reminder, now)}</span>
       </div>
       <OverflowMenu label={`Actions for ${reminder.name}`}>
         <div className="reminder-row__menu">

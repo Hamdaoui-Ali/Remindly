@@ -7,8 +7,9 @@ import { ProfileService } from '@/server/profile/service';
 export default async function RemindersRoutePage() {
   const user = await requireUser();
   const service = new ReminderService();
+  const now = new Date();
   const [reminders, settings] = await Promise.all([
-    service.listActiveReminders(user.id, new Date()),
+    service.listActiveReminders(user.id, now),
     new ProfileService().getSettings(user.id),
   ]);
   const timezone = settings.timezone;
@@ -20,6 +21,7 @@ export default async function RemindersRoutePage() {
       reminders={presentedReminders}
       defaultAlertTime={settings.defaultAlertTime}
       timezone={timezone}
+      now={now.toISOString()}
     />
   );
 }

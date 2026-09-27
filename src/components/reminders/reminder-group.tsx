@@ -10,9 +10,10 @@ type ReminderGroupProps = {
   onRenew: (reminder: ReminderListPresentation, returnFocus: HTMLElement | null) => void;
   reminders: ReminderListPresentation[];
   urgency: ReminderListPresentation['urgency'];
+  now: number | null;
 };
 
-export function ReminderGroup({ label, onComplete, onEdit, onRenew, reminders, urgency }: ReminderGroupProps) {
+export function ReminderGroup({ label, now, onComplete, onEdit, onRenew, reminders, urgency }: ReminderGroupProps) {
   const headingId = `reminder-group-${urgency.toLowerCase()}`;
 
   return (
@@ -33,6 +34,7 @@ export function ReminderGroup({ label, onComplete, onEdit, onRenew, reminders, u
           <ReminderRow
             key={reminder.id}
             reminder={reminder}
+            now={now}
             onComplete={onComplete}
             onEdit={onEdit}
             onRenew={onRenew}
