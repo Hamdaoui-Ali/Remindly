@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import { serverEnv } from '@/lib/env';
 import { createConfiguredEmailDelivery } from '@/server/email/configured-delivery';
+import { withReminderRecipientOverride } from '@/server/email/delivery';
 import { processDueNotifications } from '@/server/notifications/processor';
 import { completeProcessorRun, startProcessorRun } from '@/server/notifications/processor-run';
 import { prisma } from '@/server/db/client';
@@ -31,7 +33,11 @@ export async function POST(request: Request) {
   try {
     const run = await startProcessorRun(prisma, new Date());
     processorRunId = run.id;
-    const delivery = createConfiguredEmailDelivery();
+    const environment = serverEnv();
+    const delivery = withReminderRecipientOverride(
+      createConfiguredEmailDelivery(),
+      environment.REMINDER_RECIPIENT_OVERRIDE,
+    );
     const counts = await processDueNotifications({
       now: new Date(),
       limit: PROCESSOR_BATCH_LIMIT,

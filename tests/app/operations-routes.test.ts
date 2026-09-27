@@ -242,6 +242,35 @@ describe('POST /api/internal/process-due-notifications', () => {
     });
   });
 
+  it('routes reminder delivery through the configured sandbox recipient override', async () => {
+    vi.stubEnv('REMINDER_RECIPIENT_OVERRIDE', 'resend-owner@example.com');
+    const send = vi.fn(async () => ({ status: 'sent' as const }));
+    configuredDelivery.mockReturnValueOnce({ send });
+    processDueNotifications.mockImplementationOnce(async ({ delivery }) => {
+      await delivery.send('REMINDER', {
+        to: 'profile@example.com',
+        subject: 'Reminder',
+        html: '<p>Reminder</p>',
+        text: 'Reminder',
+        idempotencyKey: 'notification-1',
+      });
+      return { claimed: 1, sent: 1, failed: 0, recovered: 0 };
+    });
+
+    const response = await processNotifications(new Request(
+      'http://localhost/api/internal/process-due-notifications',
+      {
+        method: 'POST',
+        headers: { 'x-scheduler-secret': environment.SCHEDULER_SECRET },
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(send).toHaveBeenCalledWith('REMINDER', expect.objectContaining({
+      to: 'resend-owner@example.com',
+    }), undefined, undefined);
+  });
+
   it('returns a sanitized failure when processing cannot complete', async () => {
     configuredDelivery.mockReturnValueOnce({ send: vi.fn() });
     processDueNotifications.mockRejectedValueOnce(
