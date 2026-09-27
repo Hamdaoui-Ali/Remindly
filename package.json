@@ -17,6 +17,7 @@
     "profiles:reconcile": "tsx scripts/reconcile-supabase-profiles.ts",
     "reminders:backfill": "tsx scripts/backfill-reminder-alerts.ts",
     "reminders:verify-cutover": "tsx scripts/verify-reminder-cutover.ts",
+    "notifications:verify": "tsx scripts/verify-notification-readiness.ts",
     "db:studio": "prisma studio"
   },
   "keywords": [],
