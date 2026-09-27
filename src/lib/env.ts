@@ -48,6 +48,7 @@ const envSchema = z.object({
   SUPABASE_SEND_EMAIL_HOOK_SECRET: optionalNonEmptyString,
   RESEND_API_KEY: optionalNonEmptyString,
   RESEND_FROM: optionalNonEmptyString,
+  REMINDER_RECIPIENT_OVERRIDE: optionalEmail,
   EMAIL_PROVIDER: emailProviderSchema,
   GMAIL_CLIENT_ID: optionalNonEmptyString,
   GMAIL_CLIENT_SECRET: optionalNonEmptyString,

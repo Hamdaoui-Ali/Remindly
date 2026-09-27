@@ -106,4 +106,19 @@ describe('parseServerEnv', () => {
     expect(env.GMAIL_CLIENT_ID).toBeUndefined();
     expect(env.GMAIL_TOTAL_DAILY_BUDGET).toBe(350);
   });
+
+  it('accepts a reminder-only recipient override for provider sandbox delivery', () => {
+    const env = parseServerEnv({
+      DATABASE_URL: 'postgresql://pooler.example/remindly',
+      SCHEDULER_SECRET: 's'.repeat(16),
+      EMAIL_PROVIDER: 'resend',
+      RESEND_API_KEY: 're_test',
+      RESEND_FROM: 'onboarding@resend.dev',
+      REMINDER_RECIPIENT_OVERRIDE: 'resend-owner@example.com',
+      APP_URL: 'http://localhost:3000',
+      NODE_ENV: 'test',
+    });
+
+    expect(env.REMINDER_RECIPIENT_OVERRIDE).toBe('resend-owner@example.com');
+  });
 });
