@@ -11,23 +11,59 @@ const supabaseEnvSchema = supabasePublicEnvSchema.extend({
 });
 
 const appUrlSchema = z.string().url();
+const emptyStringAsUndefined = (value: unknown) => (
+  typeof value === 'string' && value.trim() === '' ? undefined : value
+);
+const optionalNonEmptyString = z.preprocess(
+  emptyStringAsUndefined,
+  z.string().min(1).optional(),
+);
+const optionalEmail = z.preprocess(
+  emptyStringAsUndefined,
+  z.string().email().optional(),
+);
+const defaultPositiveInteger = (fallback: number) => z.preprocess(
+  emptyStringAsUndefined,
+  z.coerce.number().int().positive().default(fallback),
+);
+const emailProviderSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const normalized = value.trim().toLowerCase();
+    if (
+      normalized.length >= 2
+      && ((normalized.startsWith('"') && normalized.endsWith('"'))
+        || (normalized.startsWith("'") && normalized.endsWith("'")))
+    ) {
+      return normalized.slice(1, -1).trim();
+    }
+    return normalized;
+  },
+  z.enum(['resend', 'gmail']).default('resend'),
+);
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   SCHEDULER_SECRET: z.string().min(16),
-  SUPABASE_SEND_EMAIL_HOOK_SECRET: z.string().min(1).optional(),
-  RESEND_API_KEY: z.string().min(1).optional(),
-  RESEND_FROM: z.string().min(1).optional(),
-  EMAIL_PROVIDER: z.enum(['resend', 'gmail']).default('resend'),
-  GMAIL_CLIENT_ID: z.string().min(1).optional(),
-  GMAIL_CLIENT_SECRET: z.string().min(1).optional(),
-  GMAIL_REFRESH_TOKEN: z.string().min(1).optional(),
-  GMAIL_SENDER_EMAIL: z.string().email().optional(),
-  GMAIL_SENDER_NAME: z.string().min(1).default('Remindly'),
-  GMAIL_TOTAL_DAILY_BUDGET: z.coerce.number().int().positive().default(350),
-  GMAIL_AUTH_RESERVE: z.coerce.number().int().nonnegative().default(50),
-  GMAIL_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
-  GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS: z.coerce.number().int().positive().default(4_000),
+  SUPABASE_SEND_EMAIL_HOOK_SECRET: optionalNonEmptyString,
+  RESEND_API_KEY: optionalNonEmptyString,
+  RESEND_FROM: optionalNonEmptyString,
+  EMAIL_PROVIDER: emailProviderSchema,
+  GMAIL_CLIENT_ID: optionalNonEmptyString,
+  GMAIL_CLIENT_SECRET: optionalNonEmptyString,
+  GMAIL_REFRESH_TOKEN: optionalNonEmptyString,
+  GMAIL_SENDER_EMAIL: optionalEmail,
+  GMAIL_SENDER_NAME: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().min(1).default('Remindly'),
+  ),
+  GMAIL_TOTAL_DAILY_BUDGET: defaultPositiveInteger(350),
+  GMAIL_AUTH_RESERVE: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().int().nonnegative().default(50),
+  ),
+  GMAIL_REQUEST_TIMEOUT_MS: defaultPositiveInteger(10_000),
+  GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS: defaultPositiveInteger(4_000),
   APP_URL: z.string().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 }).superRefine((value, context) => {
@@ -45,6 +81,13 @@ const envSchema = z.object({
   }
 });
 
+function runtimeEnvironment(): Record<string, string | undefined> {
+  const runtimeProcess = (globalThis as typeof globalThis & {
+    process?: { env: Record<string, string | undefined> };
+  }).process;
+  return runtimeProcess?.env ?? {};
+}
+
 export type ServerEnv = z.infer<typeof envSchema>;
 export type SupabasePublicEnv = z.infer<typeof supabasePublicEnvSchema>;
 export type SupabaseEnv = z.infer<typeof supabaseEnvSchema>;
@@ -58,7 +101,7 @@ export function parseSupabaseEnv(input: Record<string, unknown>): SupabaseEnv {
 }
 
 export function supabaseEnv(): SupabaseEnv {
-  return parseSupabaseEnv(process.env);
+  return parseSupabaseEnv(runtimeEnvironment());
 }
 
 export function parseServerEnv(input: Record<string, unknown>): ServerEnv {
@@ -66,9 +109,9 @@ export function parseServerEnv(input: Record<string, unknown>): ServerEnv {
 }
 
 export function serverEnv(): ServerEnv {
-  return parseServerEnv(process.env);
+  return parseServerEnv(runtimeEnvironment());
 }
 
 export function appUrl(): string {
-  return appUrlSchema.parse(process.env.APP_URL);
+  return appUrlSchema.parse(runtimeEnvironment().APP_URL);
 }
