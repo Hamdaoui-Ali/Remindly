@@ -9,3 +9,5 @@ test-results/
 *.log
 coverage/
 *.tsbuildinfo
+.vercel
+.env*
