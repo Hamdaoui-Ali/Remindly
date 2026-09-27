@@ -13,6 +13,7 @@ const PUBLIC_PAGE_ROUTES = new Set([
 
 const PUBLIC_API_ROUTES = new Set([
   '/api/health',
+  '/api/internal/notification-readiness',
   '/api/internal/process-due-notifications',
   '/api/internal/auth/send-email',
 ]);

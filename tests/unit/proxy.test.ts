@@ -75,6 +75,7 @@ describe('Next.js Proxy authentication boundary', () => {
   it('allows scheduler and Auth Hook endpoints without a user session', async () => {
     for (const pathname of [
       '/api/health',
+      '/api/internal/notification-readiness',
       '/api/internal/process-due-notifications',
       '/api/internal/auth/send-email',
     ]) {
