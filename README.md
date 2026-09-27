@@ -205,6 +205,10 @@ delivery to the account's own email address. Verify a sending domain and set
 `RESEND_FROM` to an address on that domain before sending reminders to other
 recipients.
 
+For a private one-owner sandbox, `REMINDER_RECIPIENT_OVERRIDE` can temporarily
+redirect reminder messages to the Resend account email. It never redirects Auth
+mail and should be removed as soon as a sending domain is verified.
+
 ### Gmail budget boundary
 
 The Gmail refactor includes a provider-neutral rolling send budget in
