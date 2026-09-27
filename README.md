@@ -192,6 +192,19 @@ The processor claims ledger rows atomically, isolates each send, uses a 15-minut
 
 Do not log request headers, environment values, reminder names, email bodies, or provider errors. The endpoint logs a random run identifier and aggregate counts only.
 
+Run the protected production readiness check before and after notification deployments:
+
+```powershell
+npm run notifications:verify
+```
+
+The check fails without printing secrets when provider configuration is invalid, the Supabase Cron job is inactive, the processor heartbeat is missing or stale, or notifications remain pending more than ten minutes after their scheduled time.
+
+When Resend is configured with `onboarding@resend.dev`, Resend only permits
+delivery to the account's own email address. Verify a sending domain and set
+`RESEND_FROM` to an address on that domain before sending reminders to other
+recipients.
+
 ### Gmail budget boundary
 
 The Gmail refactor includes a provider-neutral rolling send budget in
