@@ -33,6 +33,23 @@ export interface EmailDelivery {
   ): Promise<EmailDeliveryResult>;
 }
 
+export function withReminderRecipientOverride(
+  delivery: EmailDelivery,
+  recipient?: string,
+): EmailDelivery {
+  if (!recipient) return delivery;
+  return {
+    send(purpose, message, now, reservationId) {
+      return delivery.send(
+        purpose,
+        purpose === 'REMINDER' ? { ...message, to: recipient } : message,
+        now,
+        reservationId,
+      );
+    },
+  };
+}
+
 function sanitizedCode(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
     return error.code;

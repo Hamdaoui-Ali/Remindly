@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EmailDeliveryError } from '@/server/email/provider';
-import { createEmailDelivery } from '@/server/email/delivery';
+import * as emailDeliveryModule from '@/server/email/delivery';
+import type { EmailDelivery } from '@/server/email/delivery';
 import type { SendEmailInput } from '@/server/email/provider';
+
+const { createEmailDelivery } = emailDeliveryModule;
 
 const message: SendEmailInput = {
   to: 'person@example.com',
@@ -21,6 +24,38 @@ function setup() {
 }
 
 describe('EmailDeliveryService', () => {
+  it('overrides reminder recipients without redirecting authentication email', async () => {
+    const withReminderRecipientOverride = (
+      emailDeliveryModule as typeof emailDeliveryModule & {
+        withReminderRecipientOverride?: (
+          delivery: EmailDelivery,
+          recipient?: string,
+        ) => EmailDelivery;
+      }
+    ).withReminderRecipientOverride;
+
+    expect(withReminderRecipientOverride).toBeTypeOf('function');
+    if (!withReminderRecipientOverride) return;
+
+    const base: EmailDelivery = {
+      send: vi.fn(async () => ({ status: 'sent' as const })),
+    };
+    const service = withReminderRecipientOverride(base, 'resend-owner@example.com');
+    const now = new Date(1);
+
+    await service.send('REMINDER', message, now, 'reminder-attempt');
+    await service.send('AUTH', { ...message, to: 'auth-user@example.com' }, now, 'auth-attempt');
+
+    expect(base.send).toHaveBeenNthCalledWith(1, 'REMINDER', {
+      ...message,
+      to: 'resend-owner@example.com',
+    }, now, 'reminder-attempt');
+    expect(base.send).toHaveBeenNthCalledWith(2, 'AUTH', {
+      ...message,
+      to: 'auth-user@example.com',
+    }, now, 'auth-attempt');
+  });
+
   it('reserves before sending and finalizes accepted delivery', async () => {
     const deps = setup();
     const service = createEmailDelivery(deps);
