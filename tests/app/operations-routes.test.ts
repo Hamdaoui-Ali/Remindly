@@ -6,10 +6,12 @@ const {
   databaseProbe,
   configuredDelivery,
   processDueNotifications,
+  readNotificationReadiness,
 } = vi.hoisted(() => ({
   databaseProbe: vi.fn(),
   configuredDelivery: vi.fn(),
   processDueNotifications: vi.fn(),
+  readNotificationReadiness: vi.fn(),
 }));
 
 vi.mock('@/server/db/client', () => ({
@@ -22,6 +24,7 @@ vi.mock('@/server/db/client', () => ({
   },
 }));
 vi.mock('@/server/notifications/processor', () => ({ processDueNotifications }));
+vi.mock('@/server/notifications/readiness-service', () => ({ readNotificationReadiness }));
 vi.mock('@/server/email/configured-delivery', () => ({
   createConfiguredEmailDelivery: configuredDelivery,
 }));
@@ -31,6 +34,7 @@ import {
   notificationProcessorFailureCode,
   POST as processNotifications,
 } from '@/app/api/internal/process-due-notifications/route';
+import { GET as getNotificationReadiness } from '@/app/api/internal/notification-readiness/route';
 import { z } from 'zod';
 
 const environment = {
@@ -43,9 +47,67 @@ const environment = {
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.stubEnv('SCHEDULER_SECRET', environment.SCHEDULER_SECRET);
+  vi.stubEnv('EMAIL_PROVIDER', environment.EMAIL_PROVIDER);
+  vi.stubEnv('DATABASE_URL', 'postgresql://localhost/remindly');
+  vi.stubEnv('APP_URL', 'https://remindly.example.com');
+  vi.stubEnv('RESEND_API_KEY', environment.RESEND_API_KEY);
+  vi.stubEnv('RESEND_FROM', environment.RESEND_FROM);
   databaseProbe.mockReset();
   processDueNotifications.mockReset();
   configuredDelivery.mockReset();
+  readNotificationReadiness.mockReset();
+});
+
+describe('GET /api/internal/notification-readiness', () => {
+  it('rejects requests without the scheduler secret', async () => {
+    const response = await getNotificationReadiness(new Request(
+      'http://localhost/api/internal/notification-readiness',
+    ));
+
+    expect(response.status).toBe(401);
+    expect(readNotificationReadiness).not.toHaveBeenCalled();
+  });
+
+  it('returns sanitized readiness issues with a degraded status', async () => {
+    readNotificationReadiness.mockResolvedValueOnce({
+      ready: false,
+      issues: [
+        'configuration:notification_processor_config_RESEND_API_KEY',
+        'cron:inactive',
+      ],
+    });
+
+    const response = await getNotificationReadiness(new Request(
+      'http://localhost/api/internal/notification-readiness',
+      { headers: { 'x-scheduler-secret': environment.SCHEDULER_SECRET } },
+    ));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      status: 'degraded',
+      issues: [
+        'configuration:notification_processor_config_RESEND_API_KEY',
+        'cron:inactive',
+      ],
+      provider: 'resend',
+    });
+  });
+
+  it('returns ready only when every notification dependency is healthy', async () => {
+    readNotificationReadiness.mockResolvedValueOnce({ ready: true, issues: [] });
+
+    const response = await getNotificationReadiness(new Request(
+      'http://localhost/api/internal/notification-readiness',
+      { headers: { 'x-scheduler-secret': environment.SCHEDULER_SECRET } },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: 'ready',
+      issues: [],
+      provider: 'resend',
+    });
+  });
 });
 
 afterEach(() => {
