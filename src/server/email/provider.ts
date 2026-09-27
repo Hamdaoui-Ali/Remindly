@@ -20,7 +20,10 @@ export type EmailDeliveryOutcome = 'definite_failure' | 'unknown_outcome';
  * produce a duplicate after an unknown outcome.
  */
 export class EmailDeliveryError extends Error {
-  constructor(readonly outcome: EmailDeliveryOutcome) {
+  constructor(
+    readonly outcome: EmailDeliveryOutcome,
+    readonly code?: string,
+  ) {
     super(outcome === 'definite_failure'
       ? 'Email provider definite failure'
       : 'Email provider outcome unknown');

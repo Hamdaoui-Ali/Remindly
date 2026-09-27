@@ -82,7 +82,10 @@ describe('ResendEmailProvider', () => {
       html: '<p>Renew passport</p>',
       text: 'Renew passport',
       idempotencyKey: '1e4785b7-7a88-46f0-8b61-bb76dd356bd7',
-    })).rejects.toMatchObject({ outcome: 'definite_failure' });
+    })).rejects.toMatchObject({
+      outcome: 'definite_failure',
+      code: 'resend_validation_error',
+    });
   });
 
   it('classifies a thrown network error as an unknown outcome', async () => {

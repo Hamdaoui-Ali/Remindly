@@ -20,6 +20,17 @@ export interface ResendClient {
   };
 }
 
+function resendFailureCode(error: NonNullable<Extract<CreateEmailResponse, { error: unknown }>['error']>): string {
+  if (typeof error.name === 'string' && /^[a-z0-9_]+$/.test(error.name)) {
+    return `resend_${error.name}`;
+  }
+  if (error.statusCode === 401) return 'resend_unauthorized';
+  if (error.statusCode === 403) return 'resend_forbidden';
+  if (error.statusCode === 429) return 'resend_rate_limited';
+  if (typeof error.statusCode === 'number' && error.statusCode >= 500) return 'resend_5xx';
+  return 'resend_rejected';
+}
+
 export interface ResendEmailProviderOptions {
   apiKey: string;
   from: string;
@@ -47,7 +58,9 @@ export class ResendEmailProvider implements EmailProvider {
       throw new EmailDeliveryError('unknown_outcome');
     }
 
-    if (response.error) throw new EmailDeliveryError('definite_failure');
+    if (response.error) {
+      throw new EmailDeliveryError('definite_failure', resendFailureCode(response.error));
+    }
     if (!response.data) throw new EmailDeliveryError('unknown_outcome');
 
     return { providerMessageId: response.data.id };
