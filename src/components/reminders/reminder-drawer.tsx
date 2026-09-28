@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { fromZonedTime } from 'date-fns-tz';
 import { CircleAlert, CircleCheck, Plus, Trash2 } from 'lucide-react';
 
@@ -156,15 +156,27 @@ function alertAlreadyDue(values: FormValues, timezone: string) {
 }
 
 export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open, reminder, returnFocusRef, timezone }: ReminderDrawerProps) {
-  const [values, setValues] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime));
-  const initialValuesRef = useRef(values);
+  const [initialValuesSnapshot] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime));
+  const [values, setValues] = useState<FormValues>(initialValuesSnapshot);
   const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({});
   const [requestError, setRequestError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const hasUnsavedChanges = JSON.stringify(values) !== JSON.stringify(initialValuesRef.current);
+  const hasUnsavedChanges = JSON.stringify(values) !== JSON.stringify(initialValuesSnapshot);
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  const onCloseRef = useRef(onClose);
   const warning = useMemo(() => alertAlreadyDue(values, timezone), [timezone, values]);
   const title = mode === 'add' ? 'Add reminder' : mode === 'edit' ? 'Edit reminder' : 'Renew reminder';
   const submitLabel = mode === 'add' ? 'Save reminder' : mode === 'edit' ? 'Save changes' : 'Renew reminder';
+
+  const requestClose = useCallback(() => {
+    if (hasUnsavedChangesRef.current && !window.confirm('Discard your unsaved reminder changes?')) return;
+    onCloseRef.current();
+  }, []);
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+    onCloseRef.current = onClose;
+  }, [hasUnsavedChanges, onClose]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -255,7 +267,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
   };
 
   return (
-    <Drawer open={open} onClose={onClose} title={title} initialFocusRef={returnFocusRef}>
+    <Drawer open={open} onClose={requestClose} title={title} initialFocusRef={returnFocusRef}>
       <form className="reminder-form" onSubmit={submit} noValidate>
         <Field htmlFor="reminder-name" label="Name" error={errors.name}>
           <input
@@ -370,7 +382,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
             {hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
           </span>
           <div className="reminder-form__actions">
-            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="secondary" onClick={requestClose}>Cancel</Button>
             <Button type="submit" pending={pending}>{submitLabel}</Button>
           </div>
         </div>
