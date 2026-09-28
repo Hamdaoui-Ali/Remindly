@@ -286,7 +286,10 @@ button { cursor: pointer; }
 .reminders-empty p { margin: 12px 0 24px; color: var(--text-secondary); line-height: 1.55; }
 
 .reminder-form { display: grid; gap: 22px; }
-.reminder-form__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; padding-top: 22px; border-top: 1px solid var(--border); }
+.reminder-form__footer { display: grid; gap: 14px; margin-top: 10px; padding-top: 22px; border-top: 1px solid var(--border); }
+.reminder-save-status { display: inline-flex; align-items: center; gap: 8px; color: var(--success); font-size: 14px; }
+.reminder-save-status--dirty { color: #a35f00; }
+.reminder-form__actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 @media (max-width: 1080px) {
   .reminder-columns, .reminder-row { grid-template-columns: minmax(165px, 1.25fr) 118px 120px minmax(175px, 1fr) 44px; gap: 12px; }

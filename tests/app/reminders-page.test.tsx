@@ -167,6 +167,12 @@ describe('RemindersPage', () => {
     expect(screen.getByText(/add your first deadline/i)).toBeVisible();
   });
 
+  it('opens the add drawer when the page is reached from the dashboard action', async () => {
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" initiallyOpenAdd />);
+
+    expect(await screen.findByRole('dialog', { name: 'Add reminder' })).toBeVisible();
+  });
+
   it('adds and removes an alert row in the reminder editor', async () => {
     const user = userEvent.setup();
     render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
@@ -179,6 +185,65 @@ describe('RemindersPage', () => {
     const removeButtons = screen.getAllByRole('button', { name: /remove alert/i });
     await user.click(removeButtons[1]!);
     expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(1);
+  });
+
+  it('shows the saved state when the reminder editor opens', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
+  });
+
+  it('shows unsaved state after a reminder value changes', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Passport renewal');
+
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+  });
+
+  it('prevents browser unload only while reminder edits are unsaved', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
+
+    await user.type(screen.getByLabelText('Name'), 'Passport renewal');
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
+  });
+
+  it('keeps dirty reminder edits open when discard is canceled', async () => {
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Passport renewal');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(confirm).toHaveBeenCalledWith('Discard your unsaved reminder changes?');
+    expect(screen.getByRole('dialog', { name: 'Add reminder' })).toBeVisible();
+    expect(screen.getByLabelText('Name')).toHaveValue('Passport renewal');
+  });
+
+  it('closes dirty reminder edits after discard is confirmed', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+    const addButton = screen.getByRole('button', { name: /add reminder/i });
+
+    await user.click(addButton);
+    await user.type(screen.getByLabelText('Name'), 'Passport renewal');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Add reminder' })).not.toBeInTheDocument();
+    expect(addButton).toHaveFocus();
   });
 
   it('validates required fields before sending a create request', async () => {
