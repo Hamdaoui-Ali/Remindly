@@ -21,11 +21,12 @@ const GROUPS = [
 
 const STATUS_REFRESH_INTERVAL_MILLISECONDS = 30_000;
 
-export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', now }: {
+export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', now, initiallyOpenAdd = false }: {
   reminders: ReminderListPresentation[];
   defaultAlertTime: string;
   timezone?: string;
   now?: string;
+  initiallyOpenAdd?: boolean;
 }) {
   const router = useRouter();
   const refresh = router.refresh;
@@ -36,6 +37,7 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', n
   const [actionError, setActionError] = useState<string | null>(null);
   const addTriggerRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const initialDrawerOpenedRef = useRef(false);
 
   if (reminders !== previousReminders) {
     setPreviousReminders(reminders);
@@ -50,6 +52,13 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', n
     }, STATUS_REFRESH_INTERVAL_MILLISECONDS);
     return () => window.clearInterval(timer);
   }, [now, refresh]);
+
+  useEffect(() => {
+    if (!initiallyOpenAdd || initialDrawerOpenedRef.current) return;
+    initialDrawerOpenedRef.current = true;
+    returnFocusRef.current = addTriggerRef.current;
+    setDrawer({ mode: 'add', reminder: null });
+  }, [initiallyOpenAdd]);
 
   const openDrawer = (mode: DrawerMode, reminder: ReminderListPresentation | null, returnFocus: HTMLElement | null) => {
     returnFocusRef.current = returnFocus;

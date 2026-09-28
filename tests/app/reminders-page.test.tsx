@@ -167,6 +167,12 @@ describe('RemindersPage', () => {
     expect(screen.getByText(/add your first deadline/i)).toBeVisible();
   });
 
+  it('opens the add drawer when the page is reached from the dashboard action', async () => {
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" initiallyOpenAdd />);
+
+    expect(await screen.findByRole('dialog', { name: 'Add reminder' })).toBeVisible();
+  });
+
   it('adds and removes an alert row in the reminder editor', async () => {
     const user = userEvent.setup();
     render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
