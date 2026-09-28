@@ -30,6 +30,15 @@ describe('SignOutButton', () => {
     expect(push).toHaveBeenCalledWith('/login');
   });
 
+  it('uses router navigation when no redirect callback is supplied', async () => {
+    signOut.mockResolvedValue({ error: null });
+    render(<SignOutButton />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(push).toHaveBeenCalledWith('/login');
+  });
+
   it('reports a generic failure without redirecting', async () => {
     signOut.mockResolvedValue({ error: new Error('network details') });
     render(<SignOutButton />);

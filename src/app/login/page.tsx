@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState, useRef } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { loginAction, type LoginState } from '@/app/login/actions';
 import { AuthField } from '@/components/auth/auth-field';
@@ -10,14 +11,19 @@ import { AuthShell } from '@/components/auth/auth-shell';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
 import { useAuthFieldFocus } from '@/components/auth/use-auth-field-focus';
 
-const initialState: LoginState = { error: null, field: null, focus: null, attempt: 0 };
+const initialState: LoginState = { error: null, field: null, focus: null, attempt: 0, redirectTo: null };
 
 export default function LoginPage() {
   const [state, formAction] = useActionState(loginAction, initialState);
+  const router = useRouter();
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   useAuthFieldFocus(state.focus, state.attempt, { email: emailRef, password: passwordRef });
+
+  useEffect(() => {
+    if (state.redirectTo) router.push(state.redirectTo);
+  }, [router, state.redirectTo]);
 
   return (
     <AuthShell

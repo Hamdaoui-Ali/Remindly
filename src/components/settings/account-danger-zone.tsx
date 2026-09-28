@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { InlineNotice } from '@/components/ui/inline-notice';
 
-export function AccountDangerZone({ onDeleted = () => window.location.assign('/login') }: { onDeleted?: () => void }) {
+export function AccountDangerZone({ onDeleted }: { onDeleted?: () => void }) {
+  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,8 @@ export function AccountDangerZone({ onDeleted = () => window.location.assign('/l
       }
       const { error: signOutError } = await createBrowserSupabaseClient().auth.signOut();
       if (signOutError) throw signOutError;
-      onDeleted();
+      if (onDeleted) onDeleted();
+      else router.push('/login');
     } catch (cause) {
       setError(cause instanceof Error && cause.message === 'recent_authentication_required'
         ? 'For your security, please sign in again before deleting your account.'

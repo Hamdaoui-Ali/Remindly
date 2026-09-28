@@ -2,12 +2,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createBrowserSupabaseClient, signOut } = vi.hoisted(() => ({
+const { createBrowserSupabaseClient, signOut, push } = vi.hoisted(() => ({
   createBrowserSupabaseClient: vi.fn(),
   signOut: vi.fn(),
+  push: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/client', () => ({ createBrowserSupabaseClient }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 import { AccountDangerZone } from '@/components/settings/account-danger-zone';
 
@@ -15,6 +17,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   createBrowserSupabaseClient.mockReset().mockReturnValue({ auth: { signOut } });
   signOut.mockReset();
+  push.mockReset();
 });
 
 describe('AccountDangerZone', () => {
@@ -58,5 +61,17 @@ describe('AccountDangerZone', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sign in again/i);
     expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('uses router navigation when no redirect callback is supplied', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }));
+    signOut.mockResolvedValue({ error: null });
+    render(<AccountDangerZone />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Delete account' }));
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/login'));
   });
 });
