@@ -327,6 +327,8 @@ button { cursor: pointer; }
 .protected-access strong { color: var(--text-primary); font-size: 15px; }
 .protected-access small { color: var(--text-secondary); font-size: 13px; line-height: 1.4; }
 .settings-form__footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 94px; }
+.settings-save-status { display: inline-flex; align-items: center; gap: 8px; color: var(--success); font-size: 14px; }
+.settings-save-status--dirty { color: #a35f00; }
 .settings-form__actions { display: flex; gap: 10px; margin-left: auto; }
 
 @media (max-width: 760px) {

@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/client', () => ({ createBrowserSupabaseClient }));
 
 import { loginAction } from '@/app/login/actions';
 
-const initialState = { error: null, field: null, focus: null, attempt: 0 } as const;
+const initialState = { error: null, field: null, focus: null, attempt: 0, redirectTo: null } as const;
 
 beforeEach(() => {
   createBrowserSupabaseClient.mockReset();
@@ -79,6 +79,21 @@ describe('loginAction', () => {
       field: null,
       focus: 'email',
       attempt: 1,
+    });
+  });
+
+  it('returns a dashboard redirect target after confirmed sign-in', async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { user: { email_confirmed_at: '2026-09-28T10:00:00.000Z' } },
+      error: null,
+    });
+    const formData = new FormData();
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'password');
+
+    await expect(loginAction(initialState, formData)).resolves.toMatchObject({
+      error: null,
+      redirectTo: '/',
     });
   });
 });

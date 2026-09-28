@@ -1,7 +1,7 @@
 'use client';
 
-import { ShieldCheck } from 'lucide-react';
-import { useRef, useState, type FormEvent } from 'react';
+import { CircleAlert, CircleCheck, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,19 @@ export function SettingsPage({ settings }: { settings: UserSettings }) {
   const [pending, setPending] = useState(false);
   const timezoneRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLInputElement>(null);
+  const hasUnsavedChanges = values.timezone !== loaded.timezone
+    || values.defaultAlertTime !== loaded.defaultAlertTime;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined;
+
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [hasUnsavedChanges]);
 
   const update = (field: keyof EditableSettings, value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
@@ -179,6 +192,16 @@ export function SettingsPage({ settings }: { settings: UserSettings }) {
         <div className="settings-form__footer">
           <div aria-live="polite">
             {feedback ? <InlineNotice tone={feedback.tone}>{feedback.message}</InlineNotice> : null}
+          </div>
+          <div
+            className={`settings-save-status${hasUnsavedChanges ? ' settings-save-status--dirty' : ''}`}
+            role="status"
+            aria-live="polite"
+          >
+            {hasUnsavedChanges
+              ? <CircleAlert aria-hidden="true" size={18} strokeWidth={1.75} />
+              : <CircleCheck aria-hidden="true" size={18} strokeWidth={1.75} />}
+            <span>{hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}</span>
           </div>
           <div className="settings-form__actions">
             <Button type="submit" pending={pending}>Save changes</Button>

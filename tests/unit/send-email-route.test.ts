@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Webhook } from 'standardwebhooks';
+import type { EmailDelivery, EmailDeliveryResult } from '@/server/email/delivery';
 
-const send = vi.fn(async (..._args: unknown[]) => ({ status: 'sent' as const }));
+const send = vi.fn<EmailDelivery['send']>(async () => ({ status: 'sent' }));
 vi.mock('@/server/email/configured-delivery', () => ({
   createConfiguredEmailDelivery: () => ({ send }),
 }));
@@ -98,8 +99,8 @@ describe('POST /api/internal/auth/send-email', () => {
     process.env.SUPABASE_SEND_EMAIL_HOOK_SECRET = configuredSecret;
     process.env.GMAIL_AUTH_HOOK_TOTAL_TIMEOUT_MS = '20';
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    send.mockImplementationOnce(async (_purpose, message) => new Promise((_, reject) => {
-      const signal = (message as { signal?: AbortSignal }).signal;
+    send.mockImplementationOnce(async (...args) => new Promise<EmailDeliveryResult>((_, reject) => {
+      const signal = args[1].signal;
       signal?.addEventListener('abort', () => reject(new Error('abort signal observed')), { once: true });
     }));
 
