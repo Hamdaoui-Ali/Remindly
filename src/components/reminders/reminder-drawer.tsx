@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { fromZonedTime } from 'date-fns-tz';
 import { CircleAlert, CircleCheck, Plus, Trash2 } from 'lucide-react';
 
@@ -165,6 +165,16 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
   const warning = useMemo(() => alertAlreadyDue(values, timezone), [timezone, values]);
   const title = mode === 'add' ? 'Add reminder' : mode === 'edit' ? 'Edit reminder' : 'Renew reminder';
   const submitLabel = mode === 'add' ? 'Save reminder' : mode === 'edit' ? 'Save changes' : 'Renew reminder';
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const update = (field: keyof FormValues, value: string) => {
     setValues((current) => ({ ...current, [field]: value }));

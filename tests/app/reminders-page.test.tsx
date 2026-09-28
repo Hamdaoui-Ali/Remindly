@@ -206,6 +206,17 @@ describe('RemindersPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
   });
 
+  it('prevents browser unload only while reminder edits are unsaved', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
+
+    await user.type(screen.getByLabelText('Name'), 'Passport renewal');
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
+  });
+
   it('validates required fields before sending a create request', async () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);
