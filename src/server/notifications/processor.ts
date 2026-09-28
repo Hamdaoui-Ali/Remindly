@@ -1,4 +1,4 @@
-import type { Notification, Reminder, Settings, UserProfile } from '@/generated/prisma/client';
+import type { Notification, Reminder, Settings } from '@/generated/prisma/client';
 import {
   emailDeliveryOutcome,
   type SendEmailInput,
