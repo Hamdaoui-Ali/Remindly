@@ -267,6 +267,7 @@ button { cursor: pointer; }
 .reminder-row--overdue .reminder-row__rail { background: var(--overdue); }
 .reminder-row--urgent .reminder-row__rail { background: var(--urgent); }
 .reminder-row--soon .reminder-row__rail { background: var(--soon); }
+.reminder-row--targeted { background: var(--surface-subtle); box-shadow: inset 0 0 0 2px var(--focus); }
 .reminder-row__name, .reminder-row__field { display: grid; min-width: 0; gap: 4px; }
 .reminder-row__name > strong { overflow-wrap: anywhere; font-size: 15px; }
 .reminder-row__urgency { width: fit-content; font-size: 13px; font-weight: 650; }

@@ -173,6 +173,29 @@ describe('RemindersPage', () => {
     expect(await screen.findByRole('dialog', { name: 'Add reminder' })).toBeVisible();
   });
 
+  it('focuses and targets the reminder requested by a dashboard review link', async () => {
+    const scrollIntoView = vi.fn();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    try {
+      render(
+        <RemindersPage
+          reminders={[reminder()]}
+          defaultAlertTime="09:00"
+          initialFocusId="11111111-1111-4111-8111-111111111111"
+        />,
+      );
+
+      const row = screen.getByRole('article', { name: 'Passport renewal' });
+      await waitFor(() => expect(row).toHaveFocus());
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+      expect(row).toHaveClass('reminder-row--targeted');
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it('adds and removes an alert row in the reminder editor', async () => {
     const user = userEvent.setup();
     render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
