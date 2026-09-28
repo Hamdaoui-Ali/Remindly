@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState, type FormEvent, type RefObject } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { fromZonedTime } from 'date-fns-tz';
-import { Plus, Trash2 } from 'lucide-react';
+import { CircleAlert, CircleCheck, Plus, Trash2 } from 'lucide-react';
 
 import { reminderRequest, ReminderRequestError } from '@/app/(protected)/reminders/actions';
 import { Button } from '@/components/ui/button';
@@ -157,9 +157,11 @@ function alertAlreadyDue(values: FormValues, timezone: string) {
 
 export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open, reminder, returnFocusRef, timezone }: ReminderDrawerProps) {
   const [values, setValues] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime));
+  const initialValuesRef = useRef(values);
   const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({});
   const [requestError, setRequestError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const hasUnsavedChanges = JSON.stringify(values) !== JSON.stringify(initialValuesRef.current);
   const warning = useMemo(() => alertAlreadyDue(values, timezone), [timezone, values]);
   const title = mode === 'add' ? 'Add reminder' : mode === 'edit' ? 'Edit reminder' : 'Renew reminder';
   const submitLabel = mode === 'add' ? 'Save reminder' : mode === 'edit' ? 'Save changes' : 'Renew reminder';
@@ -352,9 +354,15 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
         {warning ? <InlineNotice>The email alert is already due. Saving will make it eligible to send now.</InlineNotice> : null}
         {requestError ? <InlineNotice tone="error">{requestError}</InlineNotice> : null}
 
-        <div className="reminder-form__actions">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" pending={pending}>{submitLabel}</Button>
+        <div className="reminder-form__footer">
+          <span className={`reminder-save-status${hasUnsavedChanges ? ' reminder-save-status--dirty' : ''}`} role="status">
+            {hasUnsavedChanges ? <CircleAlert aria-hidden="true" size={17} /> : <CircleCheck aria-hidden="true" size={17} />}
+            {hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
+          </span>
+          <div className="reminder-form__actions">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" pending={pending}>{submitLabel}</Button>
+          </div>
         </div>
       </form>
     </Drawer>

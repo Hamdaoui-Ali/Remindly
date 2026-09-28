@@ -187,6 +187,25 @@ describe('RemindersPage', () => {
     expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(1);
   });
 
+  it('shows the saved state when the reminder editor opens', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
+  });
+
+  it('shows unsaved state after a reminder value changes', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Passport renewal');
+
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+  });
+
   it('validates required fields before sending a create request', async () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);
