@@ -10,6 +10,7 @@ import { Drawer } from '@/components/ui/drawer';
 import { Field } from '@/components/ui/field';
 import { InlineNotice } from '@/components/ui/inline-notice';
 import { Select } from '@/components/ui/select';
+import { resolveReminderAlerts, type ReminderAlertInput } from '@/server/reminders/alerts';
 import type { ReminderListPresentation } from '@/server/reminders/presenters';
 import {
   calculateAlertAt,
@@ -155,6 +156,33 @@ function alertAlreadyDue(values: FormValues, timezone: string) {
   }
 }
 
+function alertInputs(values: FormValues, timezone: string): ReminderAlertInput[] {
+  return values.alerts.map((alert, index) => index === 0 && alert.kind === 'offset'
+    ? { kind: 'offset', offsetMinutes: selectedLeadDays(values) * 24 * 60 }
+    : alert.kind === 'offset'
+      ? { kind: 'offset', offsetMinutes: Number(alert.offsetMinutes) }
+      : { kind: 'absolute', scheduledFor: fromZonedTime(alert.scheduledFor, timezone).toISOString() });
+}
+
+function schedulePreview(values: FormValues, timezone: string): Date[] {
+  if (!values.endDate || !values.alertTime) return [];
+  try {
+    const dueAt = fromZonedTime(`${values.endDate}T${values.alertTime}:00`, timezone);
+    return resolveReminderAlerts(dueAt, alertInputs(values, timezone), timezone)
+      .map((alert) => alert.scheduledFor);
+  } catch {
+    return [];
+  }
+}
+
+function formatSchedulePreview(value: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(value);
+}
+
 export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open, reminder, returnFocusRef, timezone }: ReminderDrawerProps) {
   const [initialValuesSnapshot] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime));
   const [values, setValues] = useState<FormValues>(initialValuesSnapshot);
@@ -165,6 +193,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
   const onCloseRef = useRef(onClose);
   const warning = useMemo(() => alertAlreadyDue(values, timezone), [timezone, values]);
+  const preview = useMemo(() => schedulePreview(values, timezone), [timezone, values]);
   const title = mode === 'add' ? 'Add reminder' : mode === 'edit' ? 'Edit reminder' : 'Renew reminder';
   const submitLabel = mode === 'add' ? 'Save reminder' : mode === 'edit' ? 'Save changes' : 'Renew reminder';
 
@@ -218,11 +247,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
     if (Object.keys(nextErrors).length > 0) return;
 
     const dueAt = fromZonedTime(`${values.endDate}T${values.alertTime}:00`, timezone).toISOString();
-    const alerts = values.alerts.map((alert, index) => index === 0 && alert.kind === 'offset'
-      ? { kind: 'offset' as const, offsetMinutes: selectedLeadDays(values) * 24 * 60 }
-      : alert.kind === 'offset'
-        ? { kind: 'offset' as const, offsetMinutes: Number(alert.offsetMinutes) }
-        : { kind: 'absolute' as const, scheduledFor: fromZonedTime(alert.scheduledFor, timezone).toISOString() });
+    const alerts = alertInputs(values, timezone);
     const body = {
       name: values.name.trim(),
       endDate: values.endDate,
@@ -372,6 +397,21 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
             Add alert
           </Button>
         </fieldset>
+
+        {preview.length > 0 ? (
+          <section className="reminder-schedule-preview" aria-labelledby="reminder-schedule-preview-title" aria-live="polite">
+            <h3 id="reminder-schedule-preview-title">Email schedule</h3>
+            <p>Times are shown in {timezone}.</p>
+            <ol>
+              {preview.map((scheduledFor, index) => (
+                <li key={scheduledFor.toISOString()}>
+                  <span>{index === 0 ? 'First alert' : `Alert ${index + 1}`}</span>
+                  <time dateTime={scheduledFor.toISOString()}>{formatSchedulePreview(scheduledFor, timezone)}</time>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
 
         {warning ? <InlineNotice>The email alert is already due. Saving will make it eligible to send now.</InlineNotice> : null}
         {requestError ? <InlineNotice tone="error">{requestError}</InlineNotice> : null}

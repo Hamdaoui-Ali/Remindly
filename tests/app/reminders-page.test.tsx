@@ -173,6 +173,47 @@ describe('RemindersPage', () => {
     expect(await screen.findByRole('dialog', { name: 'Add reminder' })).toBeVisible();
   });
 
+  it('previews every email alert in the reminder timezone before saving', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" timezone="Africa/Casablanca" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-18' } });
+
+    expect(screen.getByRole('heading', { name: 'Email schedule' })).toBeVisible();
+    expect(screen.getByText('Aug 11, 2026, 9:00 AM')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: /add alert/i }));
+    const alertTypes = screen.getAllByRole('combobox', { name: 'Alert type' });
+    await user.selectOptions(alertTypes[1]!, 'absolute');
+    fireEvent.change(screen.getByLabelText('Alert date and time'), { target: { value: '2026-08-15T10:00' } });
+
+    expect(screen.getByText('Aug 15, 2026, 10:00 AM')).toBeVisible();
+  });
+
+  it('focuses and targets the reminder requested by a dashboard review link', async () => {
+    const scrollIntoView = vi.fn();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    try {
+      render(
+        <RemindersPage
+          reminders={[reminder()]}
+          defaultAlertTime="09:00"
+          initialFocusId="11111111-1111-4111-8111-111111111111"
+        />,
+      );
+
+      const row = screen.getByRole('article', { name: 'Passport renewal' });
+      await waitFor(() => expect(row).toHaveFocus());
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+      expect(row).toHaveClass('reminder-row--targeted');
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it('adds and removes an alert row in the reminder editor', async () => {
     const user = userEvent.setup();
     render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);

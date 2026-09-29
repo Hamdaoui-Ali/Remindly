@@ -18,6 +18,7 @@ export default async function RemindersRoutePage({ searchParams }: {
   const timezone = settings.timezone;
   const presentedReminders = presentReminderList(reminders, timezone);
   const openAdd = query.new === '1' || (Array.isArray(query.new) && query.new.includes('1'));
+  const initialFocusId = typeof query.focus === 'string' ? query.focus : Array.isArray(query.focus) ? query.focus[0] : undefined;
 
   return (
     <RemindersPage
@@ -27,6 +28,7 @@ export default async function RemindersRoutePage({ searchParams }: {
       timezone={timezone}
       now={now.toISOString()}
       initiallyOpenAdd={openAdd}
+      initialFocusId={initialFocusId}
     />
   );
 }
