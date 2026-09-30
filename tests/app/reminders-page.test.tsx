@@ -479,6 +479,25 @@ describe('RemindersPage', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it('blocks an added absolute alert scheduled at the deadline', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" timezone="Africa/Casablanca" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Deadline alert');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-01' } });
+    await user.click(screen.getByRole('button', { name: /add alert/i }));
+    const alertTypes = screen.getAllByRole('combobox', { name: 'Alert type' });
+    await user.selectOptions(alertTypes[1]!, 'absolute');
+    fireEvent.change(screen.getByLabelText('Alert date and time'), { target: { value: '2026-12-01T09:00' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(screen.getByText('Alert must be before the deadline.')).toBeVisible();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('blocks a custom reminder date equal to the end date', async () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);
