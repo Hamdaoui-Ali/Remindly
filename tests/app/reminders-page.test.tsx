@@ -371,6 +371,25 @@ describe('RemindersPage', () => {
     expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(1);
   });
 
+  it('stops the reminder editor at ten alerts and explains the limit', async () => {
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    const addAlertButton = screen.getByRole('button', { name: /add alert/i });
+
+    for (let index = 1; index < 10; index += 1) {
+      await user.click(addAlertButton);
+    }
+
+    expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(10);
+    expect(addAlertButton).toBeDisabled();
+    expect(screen.getByText('Up to 10 alerts per reminder.')).toBeVisible();
+
+    await user.click(addAlertButton);
+    expect(screen.getAllByRole('combobox', { name: /alert type/i })).toHaveLength(10);
+  });
+
   it('shows the saved state when the reminder editor opens', async () => {
     const user = userEvent.setup();
     render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);

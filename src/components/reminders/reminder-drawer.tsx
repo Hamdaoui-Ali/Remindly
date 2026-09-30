@@ -10,7 +10,7 @@ import { Drawer } from '@/components/ui/drawer';
 import { Field } from '@/components/ui/field';
 import { InlineNotice } from '@/components/ui/inline-notice';
 import { Select } from '@/components/ui/select';
-import { resolveReminderAlerts, type ReminderAlertInput } from '@/server/reminders/alerts';
+import { MAX_REMINDER_ALERTS, resolveReminderAlerts, type ReminderAlertInput } from '@/server/reminders/alerts';
 import type { ReminderListPresentation } from '@/server/reminders/presenters';
 import {
   calculateLeadDays,
@@ -357,6 +357,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
         <fieldset className="reminder-alerts">
           <legend>Alerts</legend>
           <p>Offset alerts move with the deadline. Absolute alerts stay fixed.</p>
+          <p>Up to {MAX_REMINDER_ALERTS} alerts per reminder.</p>
           {values.alerts.map((alert, index) => (
             <div className="reminder-alerts__row" key={index}>
               <Field htmlFor={`reminder-alert-type-${index}`} label={`Alert ${index + 1} type`} error={errors[`alert-${index}` as keyof FormValues]}>
@@ -407,7 +408,12 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
               </Button>
             </div>
           ))}
-          <Button type="button" variant="secondary" onClick={addAlert}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={addAlert}
+            disabled={values.alerts.length >= MAX_REMINDER_ALERTS}
+          >
             <Plus aria-hidden="true" size={16} />
             Add alert
           </Button>
