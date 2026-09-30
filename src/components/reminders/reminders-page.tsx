@@ -125,7 +125,7 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', n
     <main className="reminders-page">
       <PageHeader
         title="Reminders"
-        description="Track every deadline and the email scheduled for it."
+        description="Track every deadline and the email alerts scheduled for it."
         action={items.length > 0 ? addButton : undefined}
       />
 
@@ -134,7 +134,7 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', n
       {items.length === 0 ? (
         <section className="reminders-empty" aria-labelledby="reminders-empty-title">
           <h2 id="reminders-empty-title">Add your first deadline</h2>
-          <p>Create a reminder once. Remindly will show its urgency and schedule one email.</p>
+          <p>Create a reminder once. Remindly will show its urgency and schedule one or more emails.</p>
           {addButton}
         </section>
       ) : (

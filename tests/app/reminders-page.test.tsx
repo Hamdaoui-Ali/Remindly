@@ -62,6 +62,45 @@ beforeEach(() => {
 });
 
 describe('RemindersPage', () => {
+  it('describes the reminders page as supporting multiple email alerts', () => {
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" />);
+
+    expect(screen.getByText('Track every deadline and the email alerts scheduled for it.')).toBeVisible();
+    expect(screen.getByText('Create a reminder once. Remindly will show its urgency and schedule one or more emails.')).toBeVisible();
+  });
+
+  it('shows the total alert count for a multi-alert reminder', () => {
+    render(
+      <RemindersPage
+        reminders={[reminder({
+          alerts: [
+            {
+              id: 'alert-first',
+              scheduledFor: '2026-08-11T08:00:00.000Z',
+              offsetMinutes: 7 * 24 * 60,
+              scheduleVersion: 1,
+              enabled: true,
+              channel: 'EMAIL',
+            },
+            {
+              id: 'alert-second',
+              scheduledFor: '2026-08-17T08:00:00.000Z',
+              offsetMinutes: 24 * 60,
+              scheduleVersion: 1,
+              enabled: true,
+              channel: 'EMAIL',
+            },
+          ],
+        })]}
+        defaultAlertTime="09:00"
+      />,
+    );
+
+    const row = screen.getByRole('article', { name: 'Passport renewal' });
+    expect(within(row).getByText('Email alerts')).toBeVisible();
+    expect(within(row).getByText(/2 alerts/)).toBeVisible();
+  });
+
   it('renders urgency groups in overdue-to-safe order and shows every required row field', () => {
     render(
       <RemindersPage

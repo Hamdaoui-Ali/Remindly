@@ -43,6 +43,7 @@ function scheduledLabel(reminder: ReminderListPresentation, now: number | null) 
 export function ReminderRow({ now, onComplete, onEdit, onRenew, reminder }: ReminderRowProps) {
   const rowRef = useRef<HTMLElement>(null);
   const returnFocus = () => rowRef.current?.querySelector<HTMLElement>('button[aria-haspopup="dialog"]') ?? null;
+  const alertCount = reminder.alerts?.length ?? 0;
 
   return (
     <article
@@ -68,8 +69,11 @@ export function ReminderRow({ now, onComplete, onEdit, onRenew, reminder }: Remi
         <span>{reminder.relativeTime}</span>
       </div>
       <div className="reminder-row__field reminder-row__email">
-        <span className="reminder-row__mobile-label">Email alert</span>
-        <span>{scheduledLabel(reminder, now)}</span>
+        <span className="reminder-row__mobile-label">Email alerts</span>
+        <span>
+          {scheduledLabel(reminder, now)}
+          {alertCount > 1 ? ` · ${alertCount} alerts` : null}
+        </span>
       </div>
       <OverflowMenu label={`Actions for ${reminder.name}`}>
         <div className="reminder-row__menu">

@@ -26,7 +26,7 @@ export function ReminderGroup({ label, now, onComplete, onEdit, onRenew, reminde
         <span>Name</span>
         <span>End date</span>
         <span>Time remaining</span>
-        <span>Email alert</span>
+        <span>Email alerts</span>
         <span />
       </div>
       <div className="reminder-group__rows">
