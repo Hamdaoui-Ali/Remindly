@@ -21,11 +21,13 @@ const GROUPS = [
 
 const STATUS_REFRESH_INTERVAL_MILLISECONDS = 30_000;
 
-export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', now }: {
+export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', now, initiallyOpenAdd = false, initialFocusId }: {
   reminders: ReminderListPresentation[];
   defaultAlertTime: string;
   timezone?: string;
   now?: string;
+  initiallyOpenAdd?: boolean;
+  initialFocusId?: string;
 }) {
   const router = useRouter();
   const refresh = router.refresh;
@@ -36,6 +38,8 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', n
   const [actionError, setActionError] = useState<string | null>(null);
   const addTriggerRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const initialDrawerOpenedRef = useRef(false);
+  const initialFocusHandledRef = useRef(false);
 
   if (reminders !== previousReminders) {
     setPreviousReminders(reminders);
@@ -50,6 +54,31 @@ export function RemindersPage({ reminders, defaultAlertTime, timezone = 'UTC', n
     }, STATUS_REFRESH_INTERVAL_MILLISECONDS);
     return () => window.clearInterval(timer);
   }, [now, refresh]);
+
+  useEffect(() => {
+    if (!initiallyOpenAdd || initialDrawerOpenedRef.current) return;
+    initialDrawerOpenedRef.current = true;
+    returnFocusRef.current = addTriggerRef.current;
+    setDrawer({ mode: 'add', reminder: null });
+  }, [initiallyOpenAdd]);
+
+  useEffect(() => {
+    if (!initialFocusId || initialFocusHandledRef.current) return;
+    const target = Array.from(document.querySelectorAll<HTMLElement>('[data-reminder-id]'))
+      .find((element) => element.dataset.reminderId === initialFocusId);
+    if (!target) return;
+
+    initialFocusHandledRef.current = true;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+    target.focus({ preventScroll: true });
+    target.classList.add('reminder-row--targeted');
+    const timer = window.setTimeout(() => target.classList.remove('reminder-row--targeted'), 3000);
+    return () => {
+      window.clearTimeout(timer);
+      target.classList.remove('reminder-row--targeted');
+    };
+  }, [initialFocusId, items]);
 
   const openDrawer = (mode: DrawerMode, reminder: ReminderListPresentation | null, returnFocus: HTMLElement | null) => {
     returnFocusRef.current = returnFocus;

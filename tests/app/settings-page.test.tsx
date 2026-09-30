@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 import { SettingsPage } from '@/components/settings/settings-page';
 
 const settings = {
@@ -20,6 +22,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage settings={settings} />);
 
     expect(screen.getByText(/protected access/i)).toBeVisible();
+    expect(screen.getByText('All changes saved')).toBeVisible();
     expect(screen.getByText(/^Verified$/)).toBeVisible();
     expect(screen.getByLabelText('Verified email')).toHaveValue('owner@example.com');
     expect(screen.queryByRole('textbox', { name: /password/i })).not.toBeInTheDocument();
@@ -58,5 +61,58 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(timezone).toHaveValue('Africa/Casablanca');
     expect(screen.queryByText(/enter a valid iana timezone/i)).not.toBeInTheDocument();
+  });
+
+  it('shows unsaved status after an editable value changes', async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage settings={settings} />);
+
+    await user.clear(screen.getByLabelText('Timezone'));
+    await user.type(screen.getByLabelText('Timezone'), 'Europe/London');
+
+    expect(screen.getByText('Unsaved changes')).toBeVisible();
+  });
+
+  it('returns to the saved status after Cancel restores the loaded values', async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage settings={settings} />);
+
+    await user.clear(screen.getByLabelText('Timezone'));
+    await user.type(screen.getByLabelText('Timezone'), 'Europe/London');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByText('All changes saved')).toBeVisible();
+  });
+
+  it('returns to the saved status after a successful Save', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ settings: { ...settings, timezone: 'Europe/London' } }),
+    });
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<SettingsPage settings={settings} />);
+
+    await user.clear(screen.getByLabelText('Timezone'));
+    await user.type(screen.getByLabelText('Timezone'), 'Europe/London');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    expect(screen.getByText('All changes saved')).toBeVisible();
+  });
+
+  it('prevents browser unload only while settings are unsaved', async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage settings={settings} />);
+
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
+
+    await user.clear(screen.getByLabelText('Timezone'));
+    await user.type(screen.getByLabelText('Timezone'), 'Europe/London');
+
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
   });
 });

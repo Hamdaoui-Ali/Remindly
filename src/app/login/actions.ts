@@ -10,6 +10,7 @@ export type LoginState = {
   field: 'email' | 'password' | null;
   focus: 'email' | 'password' | null;
   attempt: number;
+  redirectTo: '/' | null;
 };
 
 export async function loginAction(
@@ -26,6 +27,7 @@ export async function loginAction(
       field: 'email',
       focus: 'email',
       attempt: previousState.attempt + 1,
+      redirectTo: null,
     };
   }
 
@@ -35,6 +37,7 @@ export async function loginAction(
       field: 'password',
       focus: 'password',
       attempt: previousState.attempt + 1,
+      redirectTo: null,
     };
   }
 
@@ -48,17 +51,24 @@ export async function loginAction(
         field: null,
         focus: 'email',
         attempt: previousState.attempt + 1,
+        redirectTo: null,
       };
     }
 
-    window.location.assign('/');
-    return { error: null, field: null, focus: null, attempt: previousState.attempt };
+    return {
+      error: null,
+      field: null,
+      focus: null,
+      attempt: previousState.attempt,
+      redirectTo: '/',
+    };
   } catch {
     return {
       error: GENERIC_LOGIN_ERROR,
       field: null,
       focus: 'email',
       attempt: previousState.attempt + 1,
+      redirectTo: null,
     };
   }
 }

@@ -45,7 +45,13 @@ export function ReminderRow({ now, onComplete, onEdit, onRenew, reminder }: Remi
   const returnFocus = () => rowRef.current?.querySelector<HTMLElement>('button[aria-haspopup="dialog"]') ?? null;
 
   return (
-    <article ref={rowRef} className={`reminder-row reminder-row--${reminder.urgency.toLowerCase()}`} aria-label={reminder.name}>
+    <article
+      ref={rowRef}
+      className={`reminder-row reminder-row--${reminder.urgency.toLowerCase()}`}
+      data-reminder-id={reminder.id}
+      tabIndex={-1}
+      aria-label={reminder.name}
+    >
       <span className="reminder-row__rail" aria-hidden="true" />
       <div className="reminder-row__name">
         <strong>{reminder.name}</strong>

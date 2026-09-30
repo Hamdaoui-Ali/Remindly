@@ -1,5 +1,5 @@
 import type { GmailCircuitState, Prisma, PrismaClient } from '@/generated/prisma/client';
-import { initialCircuitBreakerState, recordCircuitFailure } from '@/server/notifications/circuit-breaker';
+import { recordCircuitFailure } from '@/server/notifications/circuit-breaker';
 
 export const GMAIL_CIRCUIT_SINGLETON_ID = 'singleton';
 export type CircuitStateDatabase = PrismaClient | Prisma.TransactionClient;
