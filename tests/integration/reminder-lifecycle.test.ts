@@ -410,6 +410,20 @@ describe('ReminderService lifecycle', () => {
     ]));
   });
 
+  it('lists enabled alert schedules so the editor can preserve multi-alert reminders', async () => {
+    const { profileId, cycle } = await createOwnedMultiAlertFixture();
+
+    const item = (await service.listActiveReminders(profileId, NOW))
+      .find(({ reminder }) => reminder.id === cycle.reminder.id);
+
+    expect(item?.reminder).toMatchObject({
+      alerts: [
+        expect.objectContaining({ offsetMinutes: 1440, enabled: true }),
+        expect.objectContaining({ offsetMinutes: 60, enabled: true }),
+      ],
+    });
+  });
+
   it.each(['PROCESSING', 'SENT', 'FAILED'] as const)('lists the current %s notification schedule for an active reminder', async (status) => {
     const cycle = await createFixture({ endDate: '2026-08-21', leadDays: 1 });
     await prisma.notification.update({

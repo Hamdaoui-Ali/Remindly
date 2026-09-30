@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
-import { fromZonedTime } from 'date-fns-tz';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { CircleAlert, CircleCheck, Plus, Trash2 } from 'lucide-react';
 
 import { reminderRequest, ReminderRequestError } from '@/app/(protected)/reminders/actions';
@@ -13,7 +13,6 @@ import { Select } from '@/components/ui/select';
 import { resolveReminderAlerts, type ReminderAlertInput } from '@/server/reminders/alerts';
 import type { ReminderListPresentation } from '@/server/reminders/presenters';
 import {
-  calculateAlertAt,
   calculateLeadDays,
   calculateReminderDate,
 } from '@/server/urgency/scheduling';
@@ -49,6 +48,7 @@ type FormAlert = {
 const CUSTOM_LEAD_DAYS = 'custom';
 const PRESET_LEAD_DAYS = new Set(['1', '3', '7', '14', '30']);
 const FORM_FIELD_NAMES = new Set(['name', 'endDate', 'leadDays', 'customAlertDate', 'alertTime']);
+const MINUTES_PER_DAY = 24 * 60;
 
 const LEAD_OPTIONS = [
   ['0', 'Same day', true],
@@ -74,23 +74,43 @@ function selectedLeadDaysForDisplay(values: FormValues): number | null {
   }
 }
 
-function initialValues(mode: DrawerMode, reminder: ReminderListPresentation | null, defaultAlertTime: string): FormValues {
+function formatDateTimeLocal(value: string, timezone: string): string {
+  try {
+    return formatInTimeZone(new Date(value), timezone, "yyyy-MM-dd'T'HH:mm");
+  } catch {
+    return value.slice(0, 16);
+  }
+}
+
+function initialValues(
+  mode: DrawerMode,
+  reminder: ReminderListPresentation | null,
+  defaultAlertTime: string,
+  timezone: string,
+): FormValues {
   if (reminder && mode !== 'add') {
-    const storedLeadDays = String(reminder.alertLeadDays);
-    const preset = PRESET_LEAD_DAYS.has(storedLeadDays);
+    const firstAlert = reminder.alerts?.[0];
+    const firstOffsetMinutes = firstAlert?.offsetMinutes;
+    const storedLeadDays = String(
+      firstOffsetMinutes === null || firstOffsetMinutes === undefined
+        ? reminder.alertLeadDays
+        : firstOffsetMinutes / MINUTES_PER_DAY,
+    );
+    const numericLeadDays = Number(storedLeadDays);
+    const preset = Number.isInteger(numericLeadDays) && PRESET_LEAD_DAYS.has(storedLeadDays);
     return {
       name: reminder.name,
       endDate: reminder.endDate,
-      leadDays: preset ? storedLeadDays : CUSTOM_LEAD_DAYS,
-      customAlertDate: preset
+      leadDays: preset || Number.isInteger(numericLeadDays) ? (preset ? storedLeadDays : CUSTOM_LEAD_DAYS) : storedLeadDays,
+      customAlertDate: preset || !Number.isInteger(numericLeadDays)
         ? ''
-        : calculateReminderDate(reminder.endDate, reminder.alertLeadDays),
+        : calculateReminderDate(reminder.endDate, numericLeadDays),
       alertTime: reminder.alertTime,
       alerts: reminder.alerts?.length
         ? reminder.alerts.map((alert) => ({
             kind: alert.offsetMinutes === null ? 'absolute' : 'offset',
             offsetMinutes: String(alert.offsetMinutes ?? ''),
-            scheduledFor: alert.scheduledFor.slice(0, 16),
+            scheduledFor: formatDateTimeLocal(alert.scheduledFor, timezone),
           }))
         : [{ kind: 'offset', offsetMinutes: String(reminder.alertLeadDays * 24 * 60), scheduledFor: '' }],
     };
@@ -106,7 +126,7 @@ function validates(values: FormValues) {
   if (!values.name.trim()) errors.name = 'Enter a reminder name.';
   if (!values.endDate) errors.endDate = 'Choose an end date.';
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.alertTime)) errors.alertTime = 'Choose a valid alert time.';
-  if (values.leadDays === CUSTOM_LEAD_DAYS) {
+  if (values.leadDays === CUSTOM_LEAD_DAYS && values.alerts[0]?.kind !== 'absolute') {
     if (!values.customAlertDate) {
       errors.customAlertDate = 'Choose a reminder date.';
     } else if (values.endDate) {
@@ -143,17 +163,8 @@ function validates(values: FormValues) {
 }
 
 function alertAlreadyDue(values: FormValues, timezone: string) {
-  if (!values.endDate || !values.alertTime) return false;
-  try {
-    return calculateAlertAt({
-      endDate: values.endDate,
-      alertTime: values.alertTime,
-      leadDays: selectedLeadDays(values),
-      timezone,
-    }).getTime() < Date.now();
-  } catch {
-    return false;
-  }
+  const firstAlert = schedulePreview(values, timezone)[0];
+  return firstAlert ? firstAlert.getTime() < Date.now() : false;
 }
 
 function alertInputs(values: FormValues, timezone: string): ReminderAlertInput[] {
@@ -184,7 +195,7 @@ function formatSchedulePreview(value: Date, timezone: string): string {
 }
 
 export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open, reminder, returnFocusRef, timezone }: ReminderDrawerProps) {
-  const [initialValuesSnapshot] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime));
+  const [initialValuesSnapshot] = useState<FormValues>(() => initialValues(mode, reminder, defaultAlertTime, timezone));
   const [values, setValues] = useState<FormValues>(initialValuesSnapshot);
   const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({});
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -310,25 +321,29 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
             onChange={(event) => update('endDate', event.target.value)}
           />
         </Field>
-        <Field htmlFor="reminder-lead-days" label="Remind me" error={errors.leadDays}>
-          <Select name="leadDays" value={values.leadDays} onChange={(event) => update('leadDays', event.target.value)}>
-            {LEAD_OPTIONS.map(([value, label, disabled]) => <option key={value} value={value} disabled={disabled}>{label}</option>)}
-          </Select>
-        </Field>
-        {values.leadDays === CUSTOM_LEAD_DAYS ? (
-          <Field
-            htmlFor="reminder-custom-alert-date"
-            label="Reminder date"
-            error={errors.customAlertDate}
-          >
-            <input
-              id="reminder-custom-alert-date"
-              name="customAlertDate"
-              type="date"
-              value={values.customAlertDate}
-              onChange={(event) => update('customAlertDate', event.target.value)}
-            />
-          </Field>
+        {values.alerts[0]?.kind !== 'absolute' ? (
+          <>
+            <Field htmlFor="reminder-lead-days" label="Remind me" error={errors.leadDays}>
+              <Select name="leadDays" value={values.leadDays} onChange={(event) => update('leadDays', event.target.value)}>
+                {LEAD_OPTIONS.map(([value, label, disabled]) => <option key={value} value={value} disabled={disabled}>{label}</option>)}
+              </Select>
+            </Field>
+            {values.leadDays === CUSTOM_LEAD_DAYS ? (
+              <Field
+                htmlFor="reminder-custom-alert-date"
+                label="Reminder date"
+                error={errors.customAlertDate}
+              >
+                <input
+                  id="reminder-custom-alert-date"
+                  name="customAlertDate"
+                  type="date"
+                  value={values.customAlertDate}
+                  onChange={(event) => update('customAlertDate', event.target.value)}
+                />
+              </Field>
+            ) : null}
+          </>
         ) : null}
         <Field htmlFor="reminder-alert-time" label="At" error={errors.alertTime}>
           <input

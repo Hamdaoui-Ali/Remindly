@@ -61,10 +61,16 @@ export class ReminderRepository {
     });
   }
 
-  listActive(userId?: string): Promise<Reminder[]> {
+  listActive(userId?: string): Promise<ReminderWithAlerts[]> {
     return this.db.reminder.findMany({
       where: userId ? { userId, status: 'ACTIVE' } : { status: 'ACTIVE' },
       orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        alerts: {
+          where: { enabled: true },
+          orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
     });
   }
 

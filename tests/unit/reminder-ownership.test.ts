@@ -23,6 +23,12 @@ describe('ReminderRepository ownership boundary', () => {
     expect(findMany).toHaveBeenCalledWith({
       where: { userId: 'user-a', status: 'ACTIVE' },
       orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        alerts: {
+          where: { enabled: true },
+          orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
     });
   });
 });

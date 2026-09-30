@@ -21,6 +21,14 @@ type FixtureOverrides = Partial<{
   notificationStatus: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED' | 'CANCELLED';
   leadDays: number;
   alertTime: string;
+  alerts: Array<{
+    id: string;
+    scheduledFor: string;
+    offsetMinutes: number | null;
+    scheduleVersion: number;
+    enabled: boolean;
+    channel: 'EMAIL';
+  }>;
 }>;
 
 function reminder(overrides: FixtureOverrides = {}) {
@@ -44,6 +52,7 @@ function reminder(overrides: FixtureOverrides = {}) {
       channel: 'EMAIL' as const,
       label: overrides.scheduledLabel ?? 'Scheduled email Aug 11, 2026, 9:00 AM',
     },
+    alerts: overrides.alerts ?? [],
   };
 }
 
@@ -189,6 +198,101 @@ describe('RemindersPage', () => {
     fireEvent.change(screen.getByLabelText('Alert date and time'), { target: { value: '2026-08-15T10:00' } });
 
     expect(screen.getByText('Aug 15, 2026, 10:00 AM')).toBeVisible();
+  });
+
+  it('reopens persisted multi-alert schedules without losing alerts or shifting absolute times', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ reminder: reminder() }),
+    });
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    const alerts = [
+      {
+        id: 'alert-offset',
+        scheduledFor: '2026-08-17T11:00:00.000Z',
+        offsetMinutes: 1440,
+        scheduleVersion: 1,
+        enabled: true,
+        channel: 'EMAIL' as const,
+      },
+      {
+        id: 'alert-absolute',
+        scheduledFor: '2026-08-17T10:30:00.000Z',
+        offsetMinutes: null,
+        scheduleVersion: 1,
+        enabled: true,
+        channel: 'EMAIL' as const,
+      },
+    ];
+    render(
+      <RemindersPage
+        reminders={[reminder({ endDate: '2026-08-18', leadDays: 0, alertTime: '12:00', alerts })]}
+        defaultAlertTime="09:00"
+        timezone="Africa/Casablanca"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /actions for passport renewal/i }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getAllByLabelText('Minutes before')[0]).toHaveValue(1440);
+    expect(screen.getByLabelText('Alert date and time')).toHaveValue('2026-08-17T11:30');
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    const body = JSON.parse(request.mock.calls[0]?.[1]?.body as string);
+    expect(body.alerts).toEqual([
+      { kind: 'offset', offsetMinutes: 1440 },
+      { kind: 'absolute', scheduledFor: '2026-08-17T10:30:00.000Z' },
+    ]);
+  });
+
+  it('saves a persisted schedule whose first alert is absolute', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ reminder: reminder() }),
+    });
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    const alerts = [
+      {
+        id: 'alert-absolute-first',
+        scheduledFor: '2026-08-17T10:30:00.000Z',
+        offsetMinutes: null,
+        scheduleVersion: 1,
+        enabled: true,
+        channel: 'EMAIL' as const,
+      },
+      {
+        id: 'alert-offset-second',
+        scheduledFor: '2026-08-18T10:00:00.000Z',
+        offsetMinutes: 60,
+        scheduleVersion: 1,
+        enabled: true,
+        channel: 'EMAIL' as const,
+      },
+    ];
+    render(
+      <RemindersPage
+        reminders={[reminder({ endDate: '2026-08-18', leadDays: 0, alertTime: '12:00', alerts })]}
+        defaultAlertTime="09:00"
+        timezone="Africa/Casablanca"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /actions for passport renewal/i }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByLabelText('Remind me')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    const body = JSON.parse(request.mock.calls[0]?.[1]?.body as string);
+    expect(body.alerts).toEqual([
+      { kind: 'absolute', scheduledFor: '2026-08-17T10:30:00.000Z' },
+      { kind: 'offset', offsetMinutes: 60 },
+    ]);
   });
 
   it('focuses and targets the reminder requested by a dashboard review link', async () => {

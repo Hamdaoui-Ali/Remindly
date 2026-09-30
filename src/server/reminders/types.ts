@@ -54,7 +54,7 @@ export interface ReminderMutationResult {
 }
 
 export interface ReminderListItem {
-  reminder: Reminder;
+  reminder: ReminderWithAlerts;
   urgency: Urgency;
   remainingCalendarDays: number;
   scheduledEmail: Pick<Notification, 'id' | 'scheduledFor' | 'status' | 'channel'> | null;

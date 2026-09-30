@@ -1,5 +1,5 @@
 import type { Notification, Reminder, ReminderAlert } from '@/generated/prisma/client';
-import type { ReminderCycle, ReminderListItem, ReminderMutationResult, ReminderWithNotifications } from './types';
+import type { ReminderCycle, ReminderListItem, ReminderMutationResult, ReminderWithAlerts, ReminderWithNotifications } from './types';
 import type { Urgency } from '@/server/urgency/types';
 import { calendarDayDifference } from '@/server/urgency/calendar';
 import { calculateUrgency } from '@/server/urgency/urgency';
@@ -89,7 +89,7 @@ export function presentReminder(reminder: Reminder, alerts: ReminderAlert[] = []
 
 export function presentReminderListItem(item: ReminderListItem, timezone: string): ReminderListPresentation {
   return {
-    ...presentReminder(item.reminder),
+    ...presentReminder(item.reminder, item.reminder.alerts),
     urgency: item.urgency,
     urgencyLabel: item.urgency.charAt(0) + item.urgency.slice(1).toLowerCase(),
     remainingCalendarDays: item.remainingCalendarDays,
@@ -135,8 +135,12 @@ export function presentReminderHistory(reminder: ReminderWithNotifications) {
 
 function mutationListItem(result: ReminderMutationResult, now: Date, timezone: string): ReminderListItem {
   const endDate = dateOnly(result.reminder.endDate);
+  const reminder: ReminderWithAlerts = {
+    ...result.reminder,
+    alerts: result.alerts ?? [],
+  };
   return {
-    reminder: result.reminder,
+    reminder,
     urgency: calculateUrgency(endDate, now, timezone),
     remainingCalendarDays: calendarDayDifference(endDate, now, timezone),
     scheduledEmail: result.notification
