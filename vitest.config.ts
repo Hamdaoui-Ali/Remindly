@@ -17,6 +17,8 @@ process.env.DIRECT_URL ??= process.env.DATABASE_URL;
 export default defineConfig({
   test: {
     environment: 'jsdom',
+    // Integration fixtures share a database and singleton settings row.
+    fileParallelism: false,
     globals: true,
     globalSetup: ['./tests/global-setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
