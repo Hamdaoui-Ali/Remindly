@@ -185,4 +185,41 @@ describe('getDashboardData', () => {
     });
     expect(data).not.toHaveProperty('reminders');
   });
+
+  it('returns enabled email alert counts for dashboard reminders', async () => {
+    const reminder = await seedReminder({ name: 'Multiple alerts', endDate: '2026-08-17' });
+    await seedScheduledNotification(reminder.id, '2026-08-17T08:00:00.000Z');
+    await prisma.reminderAlert.createMany({
+      data: [
+        {
+          reminderId: reminder.id,
+          scheduledFor: new Date('2026-08-17T08:00:00.000Z'),
+          offsetMinutes: 24 * 60,
+          scheduleVersion: 1,
+          channel: 'EMAIL',
+          enabled: true,
+        },
+        {
+          reminderId: reminder.id,
+          scheduledFor: new Date('2026-08-17T09:00:00.000Z'),
+          offsetMinutes: 60,
+          scheduleVersion: 1,
+          channel: 'EMAIL',
+          enabled: true,
+        },
+        {
+          reminderId: reminder.id,
+          scheduledFor: new Date('2026-08-17T10:00:00.000Z'),
+          offsetMinutes: 0,
+          scheduleVersion: 1,
+          channel: 'EMAIL',
+          enabled: false,
+        },
+      ],
+    });
+
+    const data = await getDashboardData(NOW);
+
+    expect(data.attention.find(({ id }) => id === reminder.id)).toMatchObject({ alertCount: 2 });
+  });
 });

@@ -14,6 +14,7 @@ export interface DashboardReminderItem {
   urgency: Urgency;
   remainingCalendarDays: number;
   relativeTime: string;
+  alertCount: number;
   scheduledEmail: {
     scheduledFor: string;
     label: string;

@@ -23,6 +23,7 @@ export function AttentionList({ reminders }: { reminders: DashboardReminderItem[
                   Scheduled: {reminder.scheduledEmail
                     ? <time dateTime={reminder.scheduledEmail.scheduledFor}>{reminder.scheduledEmail.label}</time>
                     : 'Not scheduled'}
+                  {reminder.alertCount > 1 ? ` · ${reminder.alertCount} alerts` : null}
                 </small>
               </span>
               <strong className="attention-list__relative">{reminder.relativeTime}</strong>

@@ -35,6 +35,7 @@ interface CompactReminderRow {
   id: string;
   name: string;
   end_date: string;
+  alert_count: number;
   scheduled_for: string | null;
 }
 
@@ -79,6 +80,7 @@ function presentDashboardReminder(
     urgency: calculateUrgency(endDate, now, timezone),
     remainingCalendarDays,
     relativeTime: relativeTime(remainingCalendarDays),
+    alertCount: reminder.alert_count,
     scheduledEmail: reminder.scheduled_for
       ? {
           scheduledFor: reminder.scheduled_for,
@@ -151,6 +153,13 @@ export async function getDashboardData(
         reminder.id,
         reminder.name,
         reminder.end_date::text AS end_date,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM reminder_alerts alert
+          WHERE alert.reminder_id = reminder.id
+            AND alert.channel = 'EMAIL'
+            AND alert.enabled = TRUE
+        ), 0)::int AS alert_count,
         CASE WHEN current_notification.scheduled_for IS NULL THEN NULL ELSE
           TO_CHAR(
             current_notification.scheduled_for AT TIME ZONE 'UTC',

@@ -16,6 +16,7 @@ const data: DashboardData = {
       urgency: 'OVERDUE',
       remainingCalendarDays: -2,
       relativeTime: '2 days overdue',
+      alertCount: 2,
       scheduledEmail: { scheduledFor: '2026-08-17T08:00:00.000Z', label: 'Aug 17, 2026, 9:00 AM' },
     },
     {
@@ -25,6 +26,7 @@ const data: DashboardData = {
       urgency: 'URGENT',
       remainingCalendarDays: 2,
       relativeTime: '2 days left',
+      alertCount: 1,
       scheduledEmail: { scheduledFor: '2026-08-16T08:00:00.000Z', label: 'Aug 16, 2026, 9:00 AM' },
     },
   ],
@@ -45,6 +47,7 @@ const data: DashboardData = {
       urgency: 'OVERDUE',
       remainingCalendarDays: -2,
       relativeTime: '2 days overdue',
+      alertCount: 2,
       scheduledEmail: { scheduledFor: '2026-08-17T08:00:00.000Z', label: 'Aug 17, 2026, 9:00 AM' },
     },
     {
@@ -54,12 +57,20 @@ const data: DashboardData = {
       urgency: 'SOON',
       remainingCalendarDays: 6,
       relativeTime: '6 days left',
+      alertCount: 1,
       scheduledEmail: { scheduledFor: '2026-08-18T08:00:00.000Z', label: 'Aug 18, 2026, 9:00 AM' },
     },
   ],
 };
 
 describe('DashboardPage', () => {
+  it('shows the total alert count for multi-alert reminders in the attention panel', () => {
+    render(<DashboardPage data={data} />);
+
+    const attention = screen.getByRole('region', { name: 'Needs attention now' });
+    expect(within(attention).getByText(/2 alerts/)).toBeVisible();
+  });
+
   it('renders the operational summary and attention list', () => {
     render(<DashboardPage data={data} />);
 
@@ -93,6 +104,7 @@ describe('DashboardPage', () => {
       urgency: day <= 3 ? 'URGENT' as const : 'SOON' as const,
       remainingCalendarDays: day,
       relativeTime: day === 0 ? 'Due today' : `${day} days left`,
+      alertCount: 0,
       scheduledEmail: null,
     }));
 
@@ -116,6 +128,7 @@ describe('DashboardPage', () => {
       urgency: 'SAFE' as const,
       remainingCalendarDays: Number(day),
       relativeTime: `${day} days left`,
+      alertCount: 0,
       scheduledEmail: null,
     }));
 
