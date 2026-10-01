@@ -121,7 +121,7 @@ function initialValues(
   };
 }
 
-function validates(values: FormValues) {
+function validates(values: FormValues, timezone: string) {
   const errors: Partial<Record<keyof FormValues, string>> = {};
   if (!values.name.trim()) errors.name = 'Enter a reminder name.';
   if (!values.endDate) errors.endDate = 'Choose an end date.';
@@ -155,8 +155,22 @@ function validates(values: FormValues) {
         }
       }
     }
-    if (alert.kind === 'absolute' && !alert.scheduledFor) {
-      errors[`alert-${index}` as keyof FormValues] = 'Choose an absolute alert time.';
+    if (alert.kind === 'absolute') {
+      if (!alert.scheduledFor) {
+        errors[`alert-${index}` as keyof FormValues] = 'Choose an absolute alert time.';
+      } else if (values.endDate && values.alertTime) {
+        try {
+          const dueAt = fromZonedTime(`${values.endDate}T${values.alertTime}:00`, timezone);
+          const scheduledFor = fromZonedTime(alert.scheduledFor, timezone);
+          if (!Number.isNaN(dueAt.getTime())
+            && !Number.isNaN(scheduledFor.getTime())
+            && scheduledFor.getTime() >= dueAt.getTime()) {
+            errors[`alert-${index}` as keyof FormValues] = 'Alert must be before the deadline.';
+          }
+        } catch {
+          // The existing field validation handles incomplete or malformed values.
+        }
+      }
     }
   });
   return errors;
@@ -252,7 +266,7 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextErrors = validates(values);
+    const nextErrors = validates(values, timezone);
     setErrors(nextErrors);
     setRequestError(null);
     if (Object.keys(nextErrors).length > 0) return;
@@ -360,7 +374,11 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
           <p>Up to {MAX_REMINDER_ALERTS} alerts per reminder.</p>
           {values.alerts.map((alert, index) => (
             <div className="reminder-alerts__row" key={index}>
-              <Field htmlFor={`reminder-alert-type-${index}`} label={`Alert ${index + 1} type`} error={errors[`alert-${index}` as keyof FormValues]}>
+              <Field
+                htmlFor={`reminder-alert-type-${index}`}
+                label={`Alert ${index + 1} type`}
+                error={alert.kind === 'offset' ? errors[`alert-${index}` as keyof FormValues] : undefined}
+              >
                 <Select
                   name={`alertType-${index}`}
                   value={alert.kind}
@@ -388,7 +406,11 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
                   />
                 </Field>
               ) : (
-                <Field htmlFor={`reminder-alert-absolute-${index}`} label="Alert date and time">
+                <Field
+                  htmlFor={`reminder-alert-absolute-${index}`}
+                  label="Alert date and time"
+                  error={errors[`alert-${index}` as keyof FormValues]}
+                >
                   <input
                     id={`reminder-alert-absolute-${index}`}
                     type="datetime-local"
