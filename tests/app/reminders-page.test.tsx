@@ -498,6 +498,23 @@ describe('RemindersPage', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it('blocks duplicate alert schedules before submitting', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const user = userEvent.setup();
+    render(<RemindersPage reminders={[]} defaultAlertTime="09:00" timezone="Africa/Casablanca" />);
+
+    await user.click(screen.getByRole('button', { name: /add reminder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Duplicate alerts');
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-01' } });
+    await user.click(screen.getByRole('button', { name: /add alert/i }));
+    fireEvent.change(screen.getAllByLabelText('Minutes before')[1]!, { target: { value: '10080' } });
+    await user.click(screen.getByRole('button', { name: /save reminder/i }));
+
+    expect(screen.getByText('Alert schedules must be unique.')).toBeVisible();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('blocks a custom reminder date equal to the end date', async () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);

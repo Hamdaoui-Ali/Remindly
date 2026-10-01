@@ -173,6 +173,11 @@ function validates(values: FormValues, timezone: string) {
       }
     }
   });
+  const duplicateIndexes = duplicateAlertIndexes(values, timezone);
+  duplicateIndexes.forEach((index) => {
+    const field = `alert-${index}` as keyof FormValues;
+    if (!errors[field]) errors[field] = 'Alert schedules must be unique.';
+  });
   return errors;
 }
 
@@ -187,6 +192,34 @@ function alertInputs(values: FormValues, timezone: string): ReminderAlertInput[]
     : alert.kind === 'offset'
       ? { kind: 'offset', offsetMinutes: Number(alert.offsetMinutes) }
       : { kind: 'absolute', scheduledFor: fromZonedTime(alert.scheduledFor, timezone).toISOString() });
+}
+
+function duplicateAlertIndexes(values: FormValues, timezone: string): Set<number> {
+  if (!values.endDate || !values.alertTime) return new Set();
+
+  try {
+    const dueAt = fromZonedTime(`${values.endDate}T${values.alertTime}:00`, timezone);
+    if (Number.isNaN(dueAt.getTime())) return new Set();
+
+    const seen = new Map<number, number>();
+    const duplicates = new Set<number>();
+    alertInputs(values, timezone).forEach((alert, index) => {
+      const scheduledFor = alert.kind === 'offset'
+        ? new Date(dueAt.getTime() - alert.offsetMinutes * 60_000)
+        : new Date(alert.scheduledFor);
+      if (Number.isNaN(scheduledFor.getTime())) return;
+
+      const timestamp = scheduledFor.getTime();
+      if (seen.has(timestamp)) {
+        duplicates.add(index);
+      } else {
+        seen.set(timestamp, index);
+      }
+    });
+    return duplicates;
+  } catch {
+    return new Set();
+  }
 }
 
 function schedulePreview(values: FormValues, timezone: string): Date[] {
@@ -377,7 +410,6 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
               <Field
                 htmlFor={`reminder-alert-type-${index}`}
                 label={`Alert ${index + 1} type`}
-                error={alert.kind === 'offset' ? errors[`alert-${index}` as keyof FormValues] : undefined}
               >
                 <Select
                   name={`alertType-${index}`}
@@ -390,7 +422,11 @@ export function ReminderDrawer({ defaultAlertTime, mode, onClose, onSaved, open,
                 </Select>
               </Field>
               {alert.kind === 'offset' ? (
-                <Field htmlFor={`reminder-alert-offset-${index}`} label="Minutes before">
+                <Field
+                  htmlFor={`reminder-alert-offset-${index}`}
+                  label="Minutes before"
+                  error={errors[`alert-${index}` as keyof FormValues]}
+                >
                   <input
                     id={`reminder-alert-offset-${index}`}
                     type="number"
